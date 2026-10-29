@@ -1,0 +1,710 @@
+title: "Operation Blackout"
+entry_node: sub1
+
+briefing_minutes: 10
+strike_not_before: 35
+strike_minute: 50
+
+phases:
+  - {id: briefing, name: Briefing, start: 0}
+  - {id: recon, name: Recon, start: 10}
+  - {id: research, name: Research, start: 25}
+  - {id: strike, name: Strike, start: 35}
+  - {id: debrief, name: Debrief, start: 50}
+
+meters:
+  noise: {warn: 4, patch_at: [6, 8], lockdown: 10, decay_every_min: 6}
+  trace: {warn: 5, attributed: 8, max: 10}
+
+scoring:
+  precise: 30
+  quiet: 25
+  unattributable: 25
+  outcome: 20
+
+briefing: |
+  The Northern Republic is preparing a missile launch from a hardened command bunker.
+  A strike package is already tasked and will go in at minute 50.
+  You have a foothold on one compromised system inside the Republic's network.
+  Everything else is unknown. You will have to pivot out from that one box to
+  find and map the rest of the network yourselves.
+
+  You have two ways to win. Open a window for the strike by suppressing the air defence,
+  or, better, stop the launch itself by cyber means so the aircraft are stood down and never fly.
+
+  Rules of engagement: effects must be precise, quiet and unattributable.
+  Hospitals, homes, water, civil aircraft and the railway are protected.
+  Anything you break that you should not have broken costs you points.
+
+roles:
+  - {name: Recce, job: "Runs the scans. Does not read the results.", tip: "Tell Intelligence what came back."}
+  - {name: Intelligence, job: "Reads scan results and matches exploit sheets.", tip: "You never touch the box."}
+  - {name: Operator, job: "Presses the buttons for actions and obfuscation.", tip: "Do nothing without a plan."}
+  - {name: Commander, job: "Owns the noise and trace meters. Approves every action.", tip: "You decide go or no-go."}
+
+services:
+  grid_plc: {label: "Grid PLC, firmware 2.x"}
+  scada_web: {label: "Web SCADA admin panel"}
+  fire_control_hmi: {label: "Fire-control panel"}
+  radar_sw3: {label: "Radar track processor v3"}
+  launch_term: {label: "Launch control terminal"}
+  order_format: {label: "Secure order messaging gateway"}
+  rail_ctl: {label: "Rail interlocking controller"}
+  dosing_ctl: {label: "Chemical dosing controller"}
+  air_ops: {label: "Air operations alert system"}
+  telecom_sw: {label: "Telecom switch software"}
+  bms: {label: "Building management system"}
+
+sheets:
+  - {id: s_plc, name: "Remote command bug in grid PLC firmware 2.x", matches: grid_plc}
+  - {id: s_scada, name: "Weak admin login on web SCADA panels", matches: scada_web}
+  - {id: s_fire, name: "Default login on fire-control panels", matches: fire_control_hmi}
+  - {id: s_radar, name: "Input flaw in radar track processor v3", matches: radar_sw3}
+  - {id: s_launch, name: "Unpatched launch control terminal", matches: launch_term}
+  - {id: s_orders, name: "Order message sequence numbers and format", matches: order_format}
+  - {id: s_rail, name: "Command bug in rail interlocking controller", matches: rail_ctl}
+  - {id: s_dosing, name: "Unauthenticated dosing controller web panel", matches: dosing_ctl}
+  - {id: s_air, name: "Scramble alert gateway weakness", matches: air_ops}
+  - {id: s_telecom, name: "Telecom switch management flaw", matches: telecom_sw}
+  - {id: s_bms, name: "Building management default password", matches: bms}
+
+false_flag:
+  correct: grey_heron
+  groups:
+    - {id: grey_heron, name: "Grey Heron"}
+    - {id: iron_lynx, name: "Iron Lynx"}
+    - {id: pale_otter, name: "Pale Otter"}
+
+flag_text:
+  blanked: "the radar picture has gone blank"
+  stale: "the display is frozen"
+  jammed: "the command link is jammed"
+  stood_down: "a false order stood the unit down"
+  runway_dark: "the runway lights are out"
+  no_scramble: "the scramble alert is corrupt"
+  grounded: "the aircraft are grounded"
+  launcher_locked: "the launcher is locked"
+  wrong_targets: "the targeting data is corrupt"
+  pumps_stopped: "the pumps are stopped"
+  signals_red: "all signals are red"
+  cut_off: "the site is cut off from command"
+
+extra_edges:
+  - {from: fuel_depot, to: gen_ad, kind: fuel}
+  - {from: gen_ad, to: airdef, kind: backup}
+  - {from: mil_comms, to: airdef, kind: command}
+  - {from: mil_comms, to: bunker, kind: command}
+  - {from: telecoms, to: airdef, kind: command}
+
+debrief_links:
+  - "Stuxnet (about 2010): a precise effect on one objective, quiet for a long time, never officially attributed."
+  - "Ukraine power grid (December 2015): operators lost control of substations and about 230,000 people lost power."
+  - "Oldsmar water plant (2021): someone changed a chemical level through a remote access tool. An operator spotted it and reversed it."
+  - "Mirai (2016): thousands of devices taken over because they still had default logins."
+  - "Colonial Pipeline (2021): the company shut down operations because it could not be sure its control systems were safe."
+
+nodes:
+  - {id: ps_north, name: "Power station north", type: power station, desc: "Gas turbines, 400 MW", pos: [24, 8], service: scada_web, cards: [trip_station, spoof_load]}
+  - {id: ps_south, name: "Power station south", type: power station, desc: "Wind farm", pos: [76, 8], service: scada_web, cards: [overload_station]}
+
+  - id: sub1
+    name: "Substation 1"
+    type: substation
+    desc: "Feeds the hospital, east homes, rail and air defence"
+    pos: [12, 27]
+    service: grid_plc
+    needs: [{kind: power, sources: [ps_north]}]
+    cards: [open_breaker, lock_breaker]
+  - id: sub2
+    name: "Substation 2"
+    type: substation
+    desc: "Feeds water, fuel, military radar and the air base"
+    pos: [46, 27]
+    service: grid_plc
+    needs: [{kind: power, sources: [ps_north, ps_south]}]
+    cards: [open_breaker, lock_breaker]
+  - id: sub3
+    name: "Substation 3"
+    type: substation
+    desc: "Feeds west homes, civil radar, telecoms and military comms"
+    pos: [82, 27]
+    service: grid_plc
+    needs: [{kind: power, sources: [ps_south]}]
+    cards: [open_breaker, lock_breaker]
+
+  - id: hospital
+    name: "Hospital"
+    type: hospital
+    desc: "Protected. Civilians."
+    pos: [5, 50]
+    service: bms
+    protected: true
+    penalty: 15
+    needs:
+      - {kind: power, sources: [sub1]}
+      - {kind: water, sources: [water_plant], grace_minutes: 10}
+    backup: {minutes: 3}
+    notes: {3: "Own generator holds for about 3 minutes. It has a water tank for about 10 minutes."}
+    cards: [cut_hospital]
+  - id: homes_east
+    name: "East homes and businesses"
+    type: district
+    desc: "Protected. Civilians."
+    pos: [17, 50]
+    protected: true
+    penalty: 10
+    needs: [{kind: power, sources: [sub1]}]
+    cards: [open_district]
+  - id: rail
+    name: "Rail signalling"
+    type: rail
+    desc: "Interlocking for the main line"
+    pos: [29, 50]
+    service: rail_ctl
+    needs: [{kind: power, sources: [sub1]}]
+    down_flags: [signals_red]
+    cards: [set_red, set_clear]
+  - id: water_plant
+    name: "Water treatment plant"
+    type: water
+    desc: "Treats and pumps the city supply"
+    pos: [41, 50]
+    service: dosing_ctl
+    needs: [{kind: power, sources: [sub2]}]
+    down_flags: [pumps_stopped, contaminated]
+    cards: [stop_pumps, tamper_dosing]
+  - id: fuel_depot
+    name: "Fuel depot"
+    type: fuel
+    desc: "Diesel for backup generators"
+    pos: [53, 50]
+    service: scada_web
+    needs: [{kind: power, sources: [sub2]}]
+    notes: {3: "Resupplies the diesel generators across the sector."}
+    cards: [cut_pumps, tamper_gauges]
+  - id: mil_radar
+    name: "Military radar"
+    type: radar
+    desc: "Feeds the air defence battery"
+    pos: [65, 50]
+    service: radar_sw3
+    needs: [{kind: power, sources: [sub2]}]
+    notes: {2: "Runs the same track-processing software as the civil radar."}
+    cards: [shared_radar_exploit, blank_tracks, ghost_tracks, delay_feed, corrupt_iff, freeze_display]
+  - id: air_base
+    name: "Air base"
+    type: air base
+    desc: "Quick reaction aircraft"
+    pos: [77, 50]
+    service: air_ops
+    needs: [{kind: power, sources: [sub2]}]
+    counters: {sorties: 1}
+    neutralised_when: ["down", "flag:runway_dark", "flag:no_scramble", "flag:grounded", "flag:jammed", "counter:sorties<=0"]
+    cards: [cut_runway_lights, corrupt_scramble, disable_bowsers, ground_fleet]
+  - id: civil_radar
+    name: "Civil air radar"
+    type: radar
+    desc: "Protected. Airliners rely on it."
+    pos: [89, 50]
+    service: radar_sw3
+    protected: true
+    penalty: 10
+    needs: [{kind: power, sources: [sub3]}]
+    cards: [blank_civil, ghost_civil, delay_civil]
+
+  - id: feed_1b
+    name: "Feeder 1B"
+    type: feeder
+    desc: "Dedicated line from substation 1"
+    pos: [20, 72]
+    hidden: true
+    discoverable_from: airdef
+    needs: [{kind: power, sources: [sub1]}]
+    cards: [cut_feeder]
+  - id: airdef
+    name: "Air defence battery"
+    type: air defence
+    desc: "The strike package's main threat"
+    pos: [42, 72]
+    service: fire_control_hmi
+    needs: [{kind: power, sources: [feed_1b, feed_3b]}]
+    backup: {node: gen_ad, minutes: 10, refuel: fuel_depot}
+    counters: {readiness: 3}
+    neutralised_when:
+      - "down"
+      - "flag:compromised"
+      - "flag:wrong_targets"
+      - "flag:launcher_locked"
+      - "flag:jammed"
+      - "flag:stood_down"
+      - "counter:readiness<=0"
+      - "node:mil_radar:flag:blanked"
+      - "node:mil_radar:flag:stale"
+      - "node:mil_radar:down"
+      - "node:telecoms:down"
+    strike_penalties:
+      - {when: "flag:iff_corrupt", points: 5, text: "your own strike package was flagged as hostile"}
+    notes: {3: "Two dedicated feeder lines and a diesel backup generator on site."}
+    cards: [exploit_hmi, alter_targeting, lock_launcher]
+  - id: gen_ad
+    name: "Air defence backup generator"
+    type: generator
+    desc: "Diesel, holds about 10 minutes"
+    pos: [56, 72]
+    hidden: true
+    discoverable_from: airdef
+    down_flags: [no_autostart]
+    cards: [block_autostart, disable_fuel_pump]
+  - id: feed_3b
+    name: "Feeder 3B"
+    type: feeder
+    desc: "Dedicated line from substation 3"
+    pos: [68, 72]
+    hidden: true
+    discoverable_from: airdef
+    needs: [{kind: power, sources: [sub3]}]
+    cards: [cut_feeder]
+  - id: telecoms
+    name: "Telecoms exchange"
+    type: telecoms
+    desc: "Carries the air defence command link"
+    pos: [80, 72]
+    service: telecom_sw
+    needs: [{kind: power, sources: [sub3], grace_minutes: 8}]
+    notes: {3: "Battery lasts about 8 minutes."}
+    cards: [jam_command_link]
+  - id: mil_comms
+    name: "Military comms"
+    type: comms
+    desc: "Orders to the air base and air defence"
+    pos: [91, 72]
+    service: order_format
+    needs: [{kind: power, sources: [sub3]}]
+    cards: [jam_link, inject_order, intercept]
+  - id: homes_west
+    name: "West homes and businesses"
+    type: district
+    desc: "Protected. Civilians."
+    pos: [88, 92]
+    protected: true
+    penalty: 8
+    needs: [{kind: power, sources: [sub3]}]
+    cards: [open_district]
+
+  - id: bunker
+    name: "Hostile command bunker"
+    type: objective
+    desc: "The launch site. This is the real objective."
+    pos: [30, 92]
+    service: launch_term
+    neutralised_when: ["flag:locked", "flag:cut_off"]
+    cards: [lock_launch, cut_off_bunker]
+
+cards:
+  trip_station:
+    name: "Trip the station"
+    kind: exploit
+    recon: 2
+    noise: 3
+    time: 4
+    needs_intel: true
+    text: "Trip the generating plant offline."
+    tradeoff: "Defenders restart it after about 12 minutes."
+    effects: [{type: disable, node: self, duration: 12}]
+  overload_station:
+    name: "Overload the station"
+    kind: exploit
+    recon: 3
+    noise: 4
+    time: 5
+    needs_intel: true
+    text: "Push the wind farm offline."
+    tradeoff: "Loud. It stays down about 15 minutes."
+    effects: [{type: disable, node: self, duration: 15}]
+  spoof_load:
+    name: "Spoof the grid load readings"
+    kind: software
+    recon: 2
+    noise: 2
+    time: 3
+    needs_intel: true
+    text: "Operators shed load on their own."
+    tradeoff: "You do not choose what is shed. It could be the hospital."
+    confirm: "The Commander accepts that this may hit a protected site."
+    effects: [{type: random_disable, choices: [hospital, homes_east, homes_west, rail], duration: 8}]
+
+  open_breaker:
+    name: "Open the breaker"
+    kind: physical
+    recon: 1
+    noise: 2
+    time: 3
+    text: "Everything downstream loses power."
+    tradeoff: "Fast and cheap, but it takes out everything downstream. Defenders restore it after about 10 minutes."
+    effects: [{type: disable, node: self, duration: 10}]
+  lock_breaker:
+    name: "Lock the breaker controls"
+    kind: exploit
+    recon: 2
+    noise: 3
+    time: 3
+    needs_intel: true
+    text: "Stops the defenders restoring this substation."
+    tradeoff: "Only useful once it is cut. Your method gets logged."
+    effects: [{type: pin, node: self}]
+
+  cut_feeder:
+    name: "Cut the feeder line"
+    kind: physical
+    recon: 1
+    noise: 3
+    time: 3
+    text: "One supply to the air defence battery is cut."
+    tradeoff: "Precise, no collateral. Defenders reroute within about 8 minutes."
+    effects: [{type: disable, node: self, duration: 8}]
+  block_autostart:
+    name: "Block the auto-start signal"
+    kind: exploit
+    recon: 1
+    noise: 4
+    time: 3
+    needs_intel: true
+    text: "The generator never starts."
+    tradeoff: "Works at once, but it points the defenders at the air defence site."
+    effects: [{type: flag, node: self, name: no_autostart}]
+  disable_fuel_pump:
+    name: "Disable the fuel pump"
+    kind: physical
+    recon: 1
+    noise: 3
+    time: 3
+    text: "The generator dies after its first tank runs out."
+    tradeoff: "Quiet, but you must time it with the power cut."
+    effects: [{type: flag, node: self, name: no_refuel}]
+  cut_pumps:
+    name: "Cut the depot pumps"
+    kind: physical
+    recon: 2
+    noise: 2
+    time: 3
+    text: "No refuelling for any generator."
+    tradeoff: "Slow effect. It matters ten minutes after the power goes."
+    effects: [{type: disable, node: self, duration: 12}]
+  tamper_gauges:
+    name: "Tamper with the level gauges"
+    kind: software
+    recon: 3
+    noise: 3
+    time: 4
+    needs_intel: true
+    text: "The defenders think the air defence generator has fuel."
+    tradeoff: "They find out when it fails. Good timing for a strike."
+    effects: [{type: flag, node: gen_ad, name: no_refuel}]
+
+  exploit_hmi:
+    name: "Exploit the control panel"
+    kind: exploit
+    recon: 2
+    noise: 4
+    time: 4
+    needs_intel: true
+    burn: true
+    text: "Full control of the battery."
+    tradeoff: "The defenders log your method and patch it everywhere."
+    effects: [{type: flag, node: self, name: compromised}]
+  alter_targeting:
+    name: "Change its targeting data"
+    kind: software
+    recon: 2
+    noise: 3
+    time: 4
+    needs_intel: true
+    text: "The battery fires at the wrong place."
+    tradeoff: "Obvious as soon as it fires, so it only lasts about 15 minutes."
+    effects: [{type: flag, node: self, name: wrong_targets, duration: 15}]
+  lock_launcher:
+    name: "Lock the launcher"
+    kind: exploit
+    recon: 3
+    noise: 3
+    time: 4
+    needs_intel: true
+    text: "The battery cannot fire."
+    tradeoff: "Operators revert to manual control after about 9 minutes."
+    effects: [{type: flag, node: self, name: launcher_locked, duration: 9}]
+
+  shared_radar_exploit:
+    name: "Shared-software exploit"
+    kind: exploit
+    recon: 1
+    noise: 4
+    time: 4
+    needs_intel: true
+    text: "Hits the military radar and the civil radar at once."
+    tradeoff: "You get the military radar for free, but airliners lose their radar."
+    confirm: "The Commander says out loud: the civil radar goes down too."
+    collateral: 25
+    effects:
+      - {type: flag, node: mil_radar, name: blanked, duration: 6}
+      - {type: flag, node: civil_radar, name: blanked, duration: 6}
+  blank_tracks:
+    name: "Blank the tracks"
+    kind: software
+    recon: 2
+    noise: 3
+    time: 3
+    needs_intel: true
+    text: "The radar shows an empty sky."
+    tradeoff: "Operators notice within about 6 minutes."
+    effects: [{type: flag, node: self, name: blanked, duration: 6}]
+  ghost_tracks:
+    name: "Ghost tracks"
+    kind: software
+    recon: 2
+    noise: 2
+    time: 3
+    needs_intel: true
+    partial_noise: 2
+    text: "Fake aircraft appear and the battery wastes effort."
+    tradeoff: "A bad fake raises noise. Each use lowers readiness by one."
+    effects: [{type: counter, node: airdef, name: readiness, delta: -1}]
+  delay_feed:
+    name: "Delay the feed"
+    kind: software
+    recon: 2
+    noise: 1
+    time: 2
+    needs_intel: true
+    text: "Tracks arrive late."
+    tradeoff: "Quiet, but a short delay will not stop the battery firing. Lowers readiness by one."
+    effects: [{type: counter, node: airdef, name: readiness, delta: -1}]
+  corrupt_iff:
+    name: "Corrupt the friend-or-foe code"
+    kind: software
+    recon: 3
+    noise: 4
+    time: 4
+    needs_intel: true
+    text: "Friendly aircraft look hostile."
+    tradeoff: "Lowers readiness by two, but your own strike package may be flagged too."
+    effects:
+      - {type: counter, node: airdef, name: readiness, delta: -2}
+      - {type: flag, node: airdef, name: iff_corrupt}
+  freeze_display:
+    name: "Freeze the display"
+    kind: software
+    recon: 2
+    noise: 1
+    time: 2
+    text: "The picture looks fine but is stale."
+    tradeoff: "Fails as soon as anyone checks a known flight, about 5 minutes."
+    effects: [{type: flag, node: self, name: stale, duration: 5}]
+  blank_civil:
+    name: "Blank the tracks"
+    kind: software
+    recon: 2
+    noise: 3
+    time: 3
+    needs_intel: true
+    collateral: 25
+    confirm: "The Commander confirms: airliners lose separation. Heavy penalty."
+    text: "The radar shows an empty sky."
+    tradeoff: "Airliners lose separation."
+    effects: [{type: flag, node: self, name: blanked, duration: 6}]
+  ghost_civil:
+    name: "Ghost tracks"
+    kind: software
+    recon: 2
+    noise: 2
+    time: 3
+    needs_intel: true
+    collateral: 25
+    confirm: "The Commander confirms: airliners lose separation. Heavy penalty."
+    text: "Fake aircraft appear."
+    tradeoff: "Airliners lose separation."
+    effects: [{type: flag, node: self, name: ghosts, duration: 6}]
+  delay_civil:
+    name: "Delay the feed"
+    kind: software
+    recon: 2
+    noise: 1
+    time: 2
+    needs_intel: true
+    collateral: 25
+    confirm: "The Commander confirms: airliners lose separation. Heavy penalty."
+    text: "Tracks arrive late."
+    tradeoff: "Airliners lose separation."
+    effects: [{type: flag, node: self, name: delayed, duration: 6}]
+
+  jam_link:
+    name: "Jam the command link"
+    kind: software
+    recon: 2
+    noise: 3
+    time: 3
+    text: "The air base and the air defence cannot coordinate."
+    tradeoff: "Defenders switch to a backup radio after about 12 minutes."
+    effects:
+      - {type: flag, node: airdef, name: jammed, duration: 12}
+      - {type: flag, node: air_base, name: jammed, duration: 12}
+  inject_order:
+    name: "Inject a false order"
+    kind: software
+    recon: 3
+    noise: 4
+    time: 4
+    needs_intel: true
+    mismatch_noise: 3
+    text: "The air defence stands down."
+    tradeoff: "Only works if the order format matches. A wrong format raises noise by three."
+    effects: [{type: flag, node: airdef, name: stood_down, duration: 15}]
+  intercept:
+    name: "Intercept traffic"
+    kind: info
+    recon: 2
+    noise: 1
+    trace: 0
+    time: 3
+    text: "Listen to the defenders' orders."
+    tradeoff: "Quiet, but it only gives information. It changes nothing on the board."
+    effects:
+      - {type: hint, text: "Intercepted: the defenders' analysts are watching for the habits of the Grey Heron crew."}
+
+  jam_command_link:
+    name: "Jam the air defence command link"
+    kind: software
+    recon: 2
+    noise: 3
+    time: 3
+    text: "The battery cannot receive orders."
+    tradeoff: "Defenders send runners and the link returns after about 5 minutes."
+    effects: [{type: flag, node: airdef, name: jammed, duration: 5}]
+
+  cut_runway_lights:
+    name: "Cut the runway lighting"
+    kind: physical
+    recon: 2
+    noise: 2
+    time: 3
+    text: "No night scramble."
+    tradeoff: "Works because the strike goes in at night. Lasts about 20 minutes."
+    effects: [{type: flag, node: self, name: runway_dark, duration: 20}]
+  corrupt_scramble:
+    name: "Corrupt the scramble alert"
+    kind: software
+    recon: 3
+    noise: 3
+    time: 3
+    needs_intel: true
+    text: "Pilots do not receive the order."
+    tradeoff: "A phone call fixes it after about 9 minutes."
+    effects: [{type: flag, node: self, name: no_scramble, duration: 9}]
+  disable_bowsers:
+    name: "Disable the fuel bowsers"
+    kind: physical
+    recon: 3
+    noise: 3
+    time: 3
+    text: "Aircraft cannot refuel after launch."
+    tradeoff: "Delayed effect, but permanent."
+    effects: [{type: counter, node: self, name: sorties, delta: -1}]
+  ground_fleet:
+    name: "Ground the fleet (fake fault)"
+    kind: software
+    recon: 3
+    noise: 4
+    time: 4
+    needs_intel: true
+    text: "Aircraft stay on the ground."
+    tradeoff: "A real check by engineers reveals it after about 12 minutes."
+    effects: [{type: flag, node: self, name: grounded, duration: 12}]
+
+  cut_hospital:
+    name: "Cut the hospital's power"
+    kind: physical
+    recon: 1
+    noise: 2
+    time: 3
+    confirm: "The Commander confirms: the hospital loses power. Heavy penalty."
+    text: "Lights out."
+    tradeoff: "Its generator holds about 3 minutes and then fails. Heavy penalty."
+    effects: [{type: disable, node: self}]
+  open_district:
+    name: "Open the district breaker"
+    kind: physical
+    recon: 1
+    noise: 2
+    time: 3
+    confirm: "The Commander confirms: homes and businesses lose power. Heavy penalty."
+    text: "A whole district goes dark."
+    tradeoff: "Heavy penalty, scaled by how many people live there."
+    effects: [{type: disable, node: self}]
+
+  stop_pumps:
+    name: "Stop the pumps"
+    kind: software
+    recon: 2
+    noise: 3
+    time: 3
+    needs_intel: true
+    text: "Pressure drops across the supply."
+    tradeoff: "Operators restart the pumps after about 9 minutes."
+    effects: [{type: flag, node: self, name: pumps_stopped, duration: 9}]
+  tamper_dosing:
+    name: "Alter the chemical dosing"
+    kind: software
+    recon: 3
+    noise: 4
+    time: 5
+    needs_intel: true
+    collateral: 40
+    confirm: "The Commander confirms: unsafe drinking water. Worst penalty in the game."
+    text: "The water becomes unsafe."
+    tradeoff: "Worst penalty in the game. Dosing is protected for a reason."
+    effects: [{type: flag, node: self, name: contaminated}]
+
+  set_red:
+    name: "Set all signals to red"
+    kind: software
+    recon: 2
+    noise: 3
+    time: 3
+    needs_intel: true
+    text: "Trains stop."
+    tradeoff: "Safe, but it is a distraction that raises defender readiness (noise +2)."
+    effects:
+      - {type: flag, node: self, name: signals_red, duration: 10}
+      - {type: noise, delta: 2}
+  set_clear:
+    name: "Set signals to clear"
+    kind: software
+    recon: 3
+    noise: 4
+    time: 4
+    needs_intel: true
+    collateral: 30
+    confirm: "The Commander confirms: trains can collide. Catastrophic penalty."
+    text: "Trains run into each other."
+    tradeoff: "Catastrophic penalty. This is the one to choose not to do."
+    effects: [{type: flag, node: self, name: signals_clear}]
+
+  lock_launch:
+    name: "Lock the launch control"
+    kind: exploit
+    recon: 3
+    noise: 5
+    time: 6
+    needs_intel: true
+    text: "The site cannot fire."
+    tradeoff: "The best outcome and the loudest action. Needs the right exploit sheet."
+    effects: [{type: flag, node: self, name: locked}]
+  cut_off_bunker:
+    name: "Cut it off from command"
+    kind: software
+    recon: 2
+    noise: 4
+    time: 4
+    needs_intel: true
+    text: "The site cannot receive orders."
+    tradeoff: "Defenders may send a runner. Lasts about 8 minutes, so time it for the strike."
+    effects: [{type: flag, node: self, name: cut_off, duration: 8}]

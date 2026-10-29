@@ -1,0 +1,9 @@
+services:
+  cadet-cyber-game:
+    build: .
+    container_name: cadet-cyber-game
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./scenario:/app/scenario:ro

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DM console</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header><h1>DM console</h1></header>
+<div style="padding:16px;max-width:600px">
+  <p>Clock: <span id="clock">0:00</span> (<span id="phase"></span>)</p>
+  <p>Noise: <span id="noise"></span> &nbsp; Trace: <span id="trace"></span> &nbsp; Collateral points: <span id="collateral"></span></p>
+
+  <h3>Clock control</h3>
+  <button id="jump40">Jump to minute 40 (force the twist)</button>
+  <button class="secondary" id="jump5">+5 minutes</button>
+
+  <h3>Session control</h3>
+  <button id="start">Start operation</button>
+  <button class="danger" id="reset">Reset game</button>
+
+  <h3>Briefing</h3>
+  <pre id="briefing" style="white-space:pre-wrap;font-size:13px;color:#cfd3d8"></pre>
+
+  <h3>Exploit sheets (hand to Intelligence)</h3>
+  <ul id="sheets"></ul>
+
+  <h3>Debrief links</h3>
+  <ul id="debrief"></ul>
+</div>
+<script>
+const el = (id) => document.getElementById(id);
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  return res.json();
+}
+async function refresh() {
+  const state = await api("/api/state");
+  el("clock").textContent = Math.floor(state.minutes) + ":" + String(Math.floor((state.minutes % 1) * 60)).padStart(2, "0");
+  el("phase").textContent = state.phase_name;
+  el("noise").textContent = state.meters.noise + " / " + state.meters.noise_lockdown;
+  el("trace").textContent = state.meters.trace + " / " + state.meters.trace_attributed;
+  el("collateral").textContent = state.collateral_points;
+}
+async function loadScenario() {
+  const sc = await api("/api/scenario");
+  el("briefing").textContent = sc.briefing;
+  el("sheets").innerHTML = sc.sheets.map((s) => `<li>${s.name}</li>`).join("");
+  el("debrief").innerHTML = sc.debrief_links.map((d) => `<li>${d}</li>`).join("");
+}
+el("jump40").onclick = async () => {
+  const state = await api("/api/state");
+  const delta = 40 - state.minutes;
+  if (delta > 0) await api("/api/offset", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ minutes: delta }) });
+  refresh();
+};
+el("jump5").onclick = async () => {
+  await api("/api/offset", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ minutes: 5 }) });
+  refresh();
+};
+el("start").onclick = async () => { await api("/api/start", { method: "POST" }); refresh(); };
+el("reset").onclick = async () => { await api("/api/reset", { method: "POST" }); refresh(); };
+loadScenario();
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>

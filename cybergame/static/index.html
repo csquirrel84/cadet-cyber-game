@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cadet cyber game</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1 id="title">Operation Blackout</h1>
+  <div>
+    <span id="phase">briefing</span>
+    &nbsp;&nbsp;
+    <span id="clock">0:00</span>
+  </div>
+</header>
+
+<div id="meters">
+  <div class="meter">
+    <div class="meter-label"><span>noise</span><span id="noise-num">0 / 10</span></div>
+    <div class="meter-bar" id="noise-bar"><div class="meter-fill noise-fill" id="noise-fill" style="width:0%"></div></div>
+  </div>
+  <div class="meter">
+    <div class="meter-label"><span>trace</span><span id="trace-num">0 / 10</span></div>
+    <div class="meter-bar" id="trace-bar"><div class="meter-fill trace-fill" id="trace-fill" style="width:0%"></div></div>
+  </div>
+</div>
+
+<div id="map">
+  <svg id="island-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+    <rect x="0" y="0" width="100" height="100" fill="#0e2a33"/>
+    <g id="island-tiles"></g>
+    <path id="river-bank" class="river-bank"/>
+    <path id="river-water" class="river-water"/>
+    <g id="river-detail"></g>
+    <g id="foam"></g>
+    <g id="forest"></g>
+  </svg>
+  <svg id="overlay-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
+  <div id="map-nodes"></div>
+</div>
+
+<div id="term-wrap">
+  <div id="term"></div>
+</div>
+
+<div id="input-row">
+  <span id="prompt-label">operator@field:~$</span>
+  <input id="cmd-input" autocomplete="off" spellcheck="false" placeholder="type help for commands">
+</div>
+
+<div id="roll-panel">
+  <button id="roll-btn" disabled>ROLL</button>
+  <div id="roll-result">-</div>
+  <div style="flex:1"></div>
+  <button id="start-btn">start operation</button>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
