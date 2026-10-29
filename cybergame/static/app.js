@@ -189,19 +189,45 @@ function guyWires(cx, topY, baseY, spread, color) {
     <line x1="${cx}" y1="${topY}" x2="${cx + spread}" y2="${baseY}" stroke="${color}" stroke-width="0.25" opacity="0.6"/>`;
 }
 
+/** A small iso crate sat on the ground at (cx, cy). */
+function crate(cx, cy, size, base) {
+  return isoBlock(cx, cy, size, size * 0.5, size, base) +
+    `<line x1="${cx - size}" y1="${cy - size * 0.1}" x2="${cx}" y2="${cy + size * 0.4}" stroke="${shade(base, -0.5)}" stroke-width="0.15" opacity="0.6"/>`;
+}
+
+/** A barrel: ellipse cap on a short cylinder body. */
+function barrel(cx, cy, r, h, base) {
+  const dark = shade(base, -0.35);
+  return `<rect x="${cx - r}" y="${cy - h}" width="${r * 2}" height="${h}" fill="${base}" rx="${r * 0.3}"/>
+    <ellipse cx="${cx}" cy="${cy - h}" rx="${r}" ry="${r * 0.42}" fill="${shade(base, 0.2)}"/>
+    <line x1="${cx - r}" y1="${cy - h * 0.6}" x2="${cx + r}" y2="${cy - h * 0.6}" stroke="${dark}" stroke-width="0.25" opacity="0.7"/>`;
+}
+
+/** A short decorative fence segment, local to a building's own sprite. */
+function miniFence(x0, x1, y, color) {
+  let out = `<line x1="${x0}" y1="${y}" x2="${x1}" y2="${y - (x1 - x0) * 0.12}" stroke="${color}" stroke-width="0.3" opacity="0.8"/>`;
+  const n = Math.max(2, Math.round((x1 - x0) / 1.6));
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, x = _lerp(x0, x1, t), yy = y - (x1 - x0) * 0.12 * t;
+    out += `<line x1="${x.toFixed(2)}" y1="${(yy - 1).toFixed(2)}" x2="${x.toFixed(2)}" y2="${(yy + 0.3).toFixed(2)}" stroke="${color}" stroke-width="0.3" opacity="0.8"/>`;
+  }
+  return out;
+}
+
 const SPRITES = {
   "power station": isoBuilding(16, 32, 10, 5, 9, "#d99a3c", { nAcross: 3, nUp: 2, lit: "#ffd98a" }) +
     isoBlock(11, 24, 1.6, 1, 10, "#444") + isoBlock(20, 22, 1.6, 1, 12, "#444") +
     `<ellipse cx="11" cy="13" rx="1.4" ry="0.8" fill="#aaa" opacity="0.4"/>
      <ellipse cx="20" cy="9" rx="1.6" ry="0.9" fill="#aaa" opacity="0.35"/>
      <line x1="4" y1="27" x2="28" y2="27" stroke="#3a2c10" stroke-width="0.5" opacity="0.6"/>` +
-    hazardStripes(16, 39, 14, "#1a1a1a", "#d9a73c"),
+    hazardStripes(16, 39, 14, "#1a1a1a", "#d9a73c") +
+    crate(5, 38, 1.1, "#6b5a38") + crate(6.4, 37, 0.9, "#7a6844") + barrel(27, 38, 0.9, 1.6, "#4a6b3a"),
   substation: isoBuilding(16, 32, 9, 4.5, 6, "#8a8a8a", { windows: false }) +
     `<line x1="12" y1="18" x2="12" y2="26" stroke="#333" stroke-width="1"/>
      <line x1="20" y1="16" x2="20" y2="26" stroke="#333" stroke-width="1"/>
      <circle cx="12" cy="17" r="0.6" fill="#eee"/><circle cx="20" cy="15" r="0.6" fill="#eee"/>
      <polygon points="24,22 25.4,24.6 22.6,24.6" fill="#e0b020"/>` +
-    isoBlock(9, 37, 1.4, 1, 2, "#777"),
+    isoBlock(9, 37, 1.4, 1, 2, "#777") + miniFence(2, 8, 39, "#999"),
   hospital: isoBuilding(16, 32, 9, 4.5, 10, "#e3e3e3", { nAcross: 3, nUp: 2, lit: "#fff6d8" }) +
     `<line x1="16" y1="18" x2="16" y2="22" stroke="#c62828" stroke-width="1.6"/>
      <line x1="13.5" y1="20" x2="18.5" y2="20" stroke="#c62828" stroke-width="1.6"/>
@@ -222,7 +248,8 @@ const SPRITES = {
   fuel: isoBlock(11, 34, 4, 2, 7, "#c15a26") + isoBlock(21, 31, 4, 2, 7, "#b14e1e") +
     tankBands(11, 34, 4, 7, 3, "#7a3312") + tankBands(21, 31, 4, 7, 3, "#733212") +
     `<line x1="15" y1="29" x2="17" y2="27" stroke="#555" stroke-width="0.5"/>` +
-    hazardStripes(11, 38, 7, "#1a1a1a", "#e0a020") + hazardStripes(21, 35, 7, "#1a1a1a", "#e0a020"),
+    hazardStripes(11, 38, 7, "#1a1a1a", "#e0a020") + hazardStripes(21, 35, 7, "#1a1a1a", "#e0a020") +
+    barrel(4, 38, 0.8, 1.4, "#c15a26") + barrel(5.2, 39, 0.8, 1.4, "#733212") + miniFence(23, 29, 36, "#998"),
   radar: isoBlock(16, 33, 6, 3, 6, "#6b6b6b") +
     `<ellipse cx="16" cy="22" rx="7" ry="2.5" fill="#3a9aa0" transform="rotate(-20 16 22)"/>
      <line x1="16" y1="27" x2="16" y2="24" stroke="#444" stroke-width="0.6"/>
@@ -232,11 +259,13 @@ const SPRITES = {
   "air base": isoBuilding(16, 33, 12, 6, 6, "#7a7a7a", { nAcross: 4, nUp: 1, lit: "#dfe8c0" }) +
     `<line x1="6" y1="33" x2="26" y2="33" stroke="#c7c75a" stroke-width="0.8"/>
      <circle cx="27" cy="27" r="0.6" fill="#e04040"/>
-     <line x1="16" y1="21" x2="16" y2="27" stroke="#555" stroke-width="0.4"/>`,
+     <line x1="16" y1="21" x2="16" y2="27" stroke="#555" stroke-width="0.4"/>` +
+    crate(3, 38, 1, "#5a6b4a") + crate(28.5, 37, 1.1, "#6b7a4a"),
   "air defence": isoBlock(16, 34, 8, 4, 6, "#3a4a2f") + isoBlock(16, 26, 1.4, 4, 5, "#2a3a22") +
     sandbags(16, 36.5, 8, "#8a7a4a") +
     `<ellipse cx="13" cy="30" rx="1.6" ry="1" fill="#2e3a22" opacity="0.5"/>
-     <ellipse cx="19" cy="29" rx="1.3" ry="0.9" fill="#2e3a22" opacity="0.5"/>`,
+     <ellipse cx="19" cy="29" rx="1.3" ry="0.9" fill="#2e3a22" opacity="0.5"/>` +
+    crate(4, 39, 0.9, "#3a4a2f") + barrel(28, 39, 0.8, 1.3, "#2e3a22"),
   generator: isoBuilding(16, 33, 7, 3.5, 5, "#6b6b6b", { windows: false }) +
     isoBlock(21, 29, 1, 1, 6, "#444") +
     `<circle cx="11" cy="29" r="1" fill="none" stroke="#e0b020" stroke-width="0.4"/>
@@ -267,7 +296,8 @@ const SPRITES = {
     `<ellipse cx="11" cy="31" rx="1.8" ry="1" fill="#1a0e0e" opacity="0.6"/>
      <ellipse cx="21" cy="30" rx="1.5" ry="0.9" fill="#1a0e0e" opacity="0.6"/>
      <path d="M5,37 l1.4,-1 l-1.4,-1 l1.4,-1 l-1.4,-1" stroke="#999" stroke-width="0.25" fill="none"/>
-     <path d="M27,37 l-1.4,-1 l1.4,-1 l-1.4,-1 l1.4,-1" stroke="#999" stroke-width="0.25" fill="none"/>`,
+     <path d="M27,37 l-1.4,-1 l1.4,-1 l-1.4,-1 l1.4,-1" stroke="#999" stroke-width="0.25" fill="none"/>` +
+    crate(2.5, 39, 1, "#5a4a30") + barrel(29, 39, 0.9, 1.5, "#4a2020"),
 };
 const FOG_SPRITE = `<circle cx="16" cy="30" r="3.5" fill="#ffe14d"/>
     <circle cx="16" cy="30" r="11" fill="none" stroke="#ffe14d" stroke-width="2" stroke-dasharray="3 3"/>`;
@@ -511,6 +541,49 @@ function buildTerrain() {
     }
   }
   el("foam").innerHTML = foam.join("");
+
+  // decorative power line crossing the south-east of the island
+  const PYLON_FRAC = [[0.74, 0.14], [0.79, 0.28], [0.83, 0.44], [0.86, 0.6], [0.89, 0.76]];
+  const pylonPts = PYLON_FRAC.map(([fc, fr]) => [isoX(fc * ISO.cols, fr * ISO.rows), isoY(fc * ISO.cols, fr * ISO.rows)]);
+  let lines = "";
+  for (const [px, py] of pylonPts) {
+    lines += `<line x1="${px}" y1="${py}" x2="${px}" y2="${py - 5}" class="pylon-pole"/>
+      <line x1="${px - 1.6}" y1="${py - 4.6}" x2="${px + 1.6}" y2="${py - 4.6}" class="pylon-pole"/>
+      <line x1="${px - 1.2}" y1="${py - 5}" x2="${px + 1.2}" y2="${py - 4.2}" class="pylon-pole"/>`;
+  }
+  for (let i = 0; i < pylonPts.length - 1; i++) {
+    const [x0, y0] = pylonPts[i], [x1, y1] = pylonPts[i + 1];
+    const midX = (x0 + x1) / 2, midY = (y0 + y1) / 2 - 4.2;
+    lines += `<path class="power-wire" d="M${x0 - 1.6},${y0 - 4.6} Q${midX},${midY} ${x1 - 1.6},${y1 - 4.6}"/>
+      <path class="power-wire" d="M${x0 + 1.6},${y0 - 4.6} Q${midX},${midY} ${x1 + 1.6},${y1 - 4.6}"/>`;
+  }
+  el("powerlines").innerHTML = lines;
+
+  // a couple of parked vehicles near the trail
+  const vehicles = [];
+  const vehicleSpots = [0.3, 0.55, 0.85];
+  for (const vf of vehicleSpots) {
+    let col = null, row = null;
+    for (let i = 0; i < trailGrid.length - 1; i++) {
+      const [c0] = trailGrid[i], [c1] = trailGrid[i + 1];
+      const frac = (ISO.cols * vf - c0) / (c1 - c0 || 1);
+      if (frac >= 0 && frac <= 1) {
+        col = c0 + (c1 - c0) * frac;
+        row = trailGrid[i][1] + (trailGrid[i + 1][1] - trailGrid[i][1]) * frac;
+        break;
+      }
+    }
+    if (col === null) continue;
+    const side = rand() < 0.5 ? -1.6 : 1.6;
+    const vx = isoX(col, row + side), vy = isoY(col, row + side);
+    const bodyColor = rand() < 0.5 ? "#3a4a3a" : "#4a3a2a";
+    vehicles.push(`<ellipse class="vehicle-shadow" cx="${(vx + 0.3).toFixed(2)}" cy="${(vy + 0.6).toFixed(2)}" rx="2.4" ry="0.9"/>
+      <rect x="${(vx - 2.2).toFixed(2)}" y="${(vy - 1.6).toFixed(2)}" width="4.4" height="1.8" rx="0.3" fill="${bodyColor}"/>
+      <rect x="${(vx - 1.2).toFixed(2)}" y="${(vy - 2.4).toFixed(2)}" width="2.2" height="1" rx="0.25" fill="${shade(bodyColor, 0.15)}"/>
+      <circle cx="${(vx - 1.4).toFixed(2)}" cy="${(vy + 0.3).toFixed(2)}" r="0.55" fill="#111"/>
+      <circle cx="${(vx + 1.4).toFixed(2)}" cy="${(vy + 0.3).toFixed(2)}" r="0.55" fill="#111"/>`);
+  }
+  el("vehicles").innerHTML = vehicles.join("");
 }
 
 function updateOverlay(nodes, entryNodeId) {

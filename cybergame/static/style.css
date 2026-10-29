@@ -61,6 +61,9 @@ header h1 { font-size: 14px; margin: 0; font-weight: 400; letter-spacing: 1px; c
 .reed { fill: none; stroke: #3a5f26; stroke-width: 0.3; stroke-linecap: round; }
 .lilypad { fill: #2e5a2e; stroke: #1c3a1c; stroke-width: 0.15; }
 .foam { fill: #bfe8ec; opacity: 0.45; }
+.pylon-pole { stroke: #4a4a42; stroke-width: 0.35; opacity: 0.75; }
+.power-wire { fill: none; stroke: #2a2a24; stroke-width: 0.18; opacity: 0.6; }
+.vehicle-shadow { fill: #000; opacity: 0.25; }
 .road { fill: none; stroke: #6b5a38; stroke-width: 1.1; stroke-linecap: round; opacity: 0.55; }
 .fence { fill: none; stroke: #caa86a; stroke-width: 0.8; stroke-dasharray: 2 1.6; opacity: 0.85; }
 .fence-post { fill: #caa86a; opacity: 0.9; }
