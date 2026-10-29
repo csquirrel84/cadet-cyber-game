@@ -9,7 +9,15 @@ const input = el("cmd-input");
 
 // --------------------------------------------------------- iso projection
 
-const ISO = { cols: 52, rows: 52, tw: 3.4, th: 1.7, padX: 4, padTop: 4, padBottom: 14 };
+// Note: scaling tw/th alone cannot make the island look bigger on screen --
+// the SVG viewBox always auto-fits to exactly the content's own extent
+// (preserveAspectRatio="none"), so the island and its own measuring stick
+// grow together and the apparent size cancels out exactly. DETAIL_SCALE is
+// kept at 1 (inert) rather than ripping out the per-element scaling below;
+// what actually makes the island bigger is islandRadius() filling more of
+// the fixed 0-100 frame that node positions (from the scenario file) live in.
+const DETAIL_SCALE = 1;
+const ISO = { cols: 120, rows: 120, tw: 2.76 * DETAIL_SCALE, th: 1.38 * DETAIL_SCALE, padX: 4, padTop: 4, padBottom: 14 };
 ISO.originX = ISO.rows * (ISO.tw / 2) + ISO.padX;
 ISO.totalW = ISO.rows * ISO.tw + ISO.cols * ISO.tw / 2 + ISO.padX * 2;
 ISO.totalH = (ISO.cols + ISO.rows) * (ISO.th / 2) + ISO.padTop + ISO.padBottom;
@@ -313,27 +321,69 @@ function seededRandom(seed) {
 }
 
 function islandRadius(theta) {
-  return 38 + 6 * Math.sin(3 * theta + 1) + 4 * Math.cos(5 * theta + 0.5) + 3 * Math.sin(7 * theta + 2);
+  // Fills as much of the fixed 0-100 node-position frame as safely possible
+  // without the coastline clipping into a flat edge at the grid boundary.
+  // Lower-amplitude wobble than before: less "island blob", more "landmass".
+  return 46 + 4 * Math.sin(3 * theta + 1) + 3 * Math.cos(5 * theta + 0.5) + 2 * Math.sin(7 * theta + 2);
 }
+
+/** Hand-calibrated against the actual pins drawn in campaign-map.webp
+ * (1536x1024). Values are [x%, y%] of the full image -- this lines up
+ * exactly with #map-bg because #map is aspect-locked to the same 3:2 ratio,
+ * so a percentage of the container is the same percentage of the image.
+ * Best-effort single pass without pixel-level zoom tooling: some of the
+ * visually-similar small badges (substation vs rail, the two hidden-feeder
+ * greens) are closer guesses than the clearly distinct ones (power
+ * stations, hospital cross, radar dishes, air base runway, bunker
+ * crosshair). Easy to nudge -- it's just numbers in this table. */
+const NODE_IMAGE_POS = {
+  ps_north: [9.6, 11.5],
+  ps_south: [76.3, 6.3],
+  sub1: [49.6, 43.0],
+  sub2: [69.5, 42.9],
+  sub3: [10.7, 48.0],
+  hospital: [57.1, 32.2],
+  homes_east: [13.9, 32.6],
+  homes_west: [66.3, 22.7],
+  rail: [69.0, 52.7],
+  water_plant: [36.4, 24.6],
+  telecoms: [47.3, 13.5],
+  fuel_depot: [27.8, 41.7],
+  civil_radar: [79.8, 31.1],
+  mil_radar: [75.3, 34.6],
+  mil_comms: [90.3, 13.5],
+  air_base: [75.3, 53.7],
+  airdef: [58.3, 39.4],
+  bunker: [57.9, 61.3],
+  feed_1b: [15.0, 27.0],
+  feed_3b: [83.3, 40.0],
+  gen_ad: [19.9, 41.9],
+};
 
 /** A node's pos is a 0-100 percent pair from the scenario file. Map it onto
  * the iso grid, then project to iso screen units (shared by tiles, roads,
- * fences and the HTML node markers so everything lines up). */
+ * fences and the HTML node markers so everything lines up). This is the
+ * fallback for any node not in NODE_IMAGE_POS. */
 function nodeGrid(n) {
   return [(n.pos[0] / 100) * ISO.cols, (n.pos[1] / 100) * ISO.rows];
 }
 function nodeIso(n) {
+  if (NODE_IMAGE_POS[n.id]) {
+    const [px, py] = NODE_IMAGE_POS[n.id];
+    return [(px / 100) * ISO.totalW, (py / 100) * ISO.totalH];
+  }
   const [col, row] = nodeGrid(n);
   return [isoX(col, row), isoY(col, row)];
 }
 function nodePercent(n) {
+  if (NODE_IMAGE_POS[n.id]) return NODE_IMAGE_POS[n.id];
   const [x, y] = nodeIso(n);
   return [(x / ISO.totalW) * 100, (y / ISO.totalH) * 100];
 }
 
 function classifyTile(col, row) {
   const px = (col / ISO.cols) * 100, py = (row / ISO.rows) * 100;
-  const dx = px - 50, dy = py - 48;
+  const dx = px - 50, dy = py - 50;
   const r = Math.sqrt(dx * dx + dy * dy);
   const theta = Math.atan2(dy, dx);
   const R = islandRadius(theta);
@@ -365,225 +415,20 @@ const TRAIL_WAYPOINTS_FRAC = [[0.08, 0.68], [0.22, 0.58], [0.33, 0.66], [0.47, 0
   [0.58, 0.68], [0.7, 0.6], [0.82, 0.7], [0.93, 0.6]];
 
 function buildTerrain() {
+  // Terrain is now a real hand-crafted background image (#map-bg, set in
+  // CSS), not procedurally generated. This just sets the shared coordinate
+  // frame (viewBox) that node markers, the fence/road overlay, and the
+  // background image all line up against, and makes sure the old
+  // procedural layers are empty so nothing leftover draws over the image.
   el("island-svg").setAttribute("viewBox", `0 0 ${ISO.totalW} ${ISO.totalH}`);
   el("overlay-svg").setAttribute("viewBox", `0 0 ${ISO.totalW} ${ISO.totalH}`);
-
-  const rand = seededRandom(1337);
-  const GRASS = ["tile-grass-a", "tile-grass-b", "tile-grass-c", "tile-grass-d"];
-  const riverGrid = RIVER_WAYPOINTS_FRAC.map(([fc, fr]) => [fc * ISO.cols, fr * ISO.rows]);
-  const trailGrid = TRAIL_WAYPOINTS_FRAC.map(([fc, fr]) => [fc * ISO.cols, fr * ISO.rows]);
-
-  const tiles = [];
-  const flecks = [];
-  const grain = [];
-  for (let row = 0; row < ISO.rows; row++) {
-    for (let col = 0; col < ISO.cols; col++) {
-      const kind = classifyTile(col, row);
-      if (!kind) continue;
-      const cc = col + 0.5, cr = row + 0.5;
-      const p = [isoX(col, row), isoY(col, row), isoX(col + 1, row), isoY(col + 1, row),
-        isoX(col + 1, row + 1), isoY(col + 1, row + 1), isoX(col, row + 1), isoY(col, row + 1)];
-      const pts = `${p[0]},${p[1]} ${p[2]},${p[3]} ${p[4]},${p[5]} ${p[6]},${p[7]}`;
-      let cls;
-      const onTrail = kind === "grass" && distToPolyline(cc, cr, trailGrid) < 0.9;
-      if (onTrail) {
-        cls = rand() < 0.5 ? "tile-path-a" : "tile-path-b";
-      } else if (kind === "grass") {
-        const weights = [0.4, 0.3, 0.2, 0.1];
-        let roll = rand(), acc = 0, idx = 0;
-        for (let i = 0; i < weights.length; i++) { acc += weights[i]; if (roll <= acc) { idx = i; break; } }
-        cls = GRASS[idx];
-      } else if (kind === "sand") {
-        cls = "tile-sand";
-      } else {
-        cls = "tile-reef";
-      }
-      tiles.push(`<polygon class="${cls}" points="${pts}"/>`);
-
-      if (kind === "sand" && rand() < 0.4) {
-        const mx = isoX(col + 0.2 + rand() * 0.6, row + 0.2 + rand() * 0.6);
-        const my = isoY(col + 0.2 + rand() * 0.6, row + 0.2 + rand() * 0.6);
-        flecks.push(`<circle class="sand-fleck" cx="${mx.toFixed(2)}" cy="${my.toFixed(2)}" r="${(0.15 + rand() * 0.2).toFixed(2)}"/>`);
-      }
-      if ((kind === "grass" || onTrail) && rand() < 0.22) {
-        // fine grass-blade grain, 1-2 short ticks per tile
-        const n = 1 + (rand() < 0.4 ? 1 : 0);
-        for (let i = 0; i < n; i++) {
-          const gx = isoX(col + 0.15 + rand() * 0.7, row + 0.15 + rand() * 0.7);
-          const gy = isoY(col + 0.15 + rand() * 0.7, row + 0.15 + rand() * 0.7);
-          const a = rand() * Math.PI;
-          const dx2 = Math.cos(a) * 0.35, dy2 = Math.sin(a) * 0.18;
-          grain.push(`<line class="grass-grain" x1="${(gx - dx2).toFixed(2)}" y1="${(gy - dy2).toFixed(2)}" x2="${(gx + dx2).toFixed(2)}" y2="${(gy + dy2).toFixed(2)}"/>`);
-        }
-      }
-      if (kind === "grass" && !onTrail && rand() < 0.035) {
-        const px2 = isoX(cc, cr);
-        const py2 = isoY(cc, cr);
-        flecks.push(`<ellipse class="pebble" cx="${px2.toFixed(2)}" cy="${py2.toFixed(2)}" rx="${(0.3 + rand() * 0.3).toFixed(2)}" ry="${(0.18 + rand() * 0.15).toFixed(2)}"/>`);
-      }
-    }
+  for (const id of ["island-tiles", "river-detail", "foam", "forest", "powerlines",
+    "vehicles", "roads-paved", "city-blocks", "airstrip", "dock", "flags"]) {
+    el(id).innerHTML = "";
   }
-  el("island-tiles").innerHTML = tiles.join("") + grain.join("") + flecks.join("");
-
-  // forest clusters on open grass, away from the map edges and the trail
-  const clusters = [];
-  for (let i = 0; i < 16; i++) {
-    clusters.push({ col: 5 + rand() * 42, row: 5 + rand() * 42, r: 3.5 + rand() * 6 });
+  for (const id of ["river-bank", "river-water", "tributary-bank", "tributary-water"]) {
+    el(id).removeAttribute("d");
   }
-  const trees = [];
-  const rocks = [];
-  const bushes = [];
-  const ferns = [];
-  const logs = [];
-  for (let row = 0; row < ISO.rows; row++) {
-    for (let col = 0; col < ISO.cols; col++) {
-      const kind = classifyTile(col, row);
-      const cc = col + 0.5, cr = row + 0.5;
-      if (kind === "sand" && rand() < 0.12) {
-        const jx = isoX(cc, cr), jy = isoY(cc, cr);
-        rocks.push(`<ellipse class="rock" cx="${jx.toFixed(2)}" cy="${(jy + 0.3).toFixed(2)}" rx="1" ry="0.5"/>
-          <ellipse class="rock-top" cx="${jx.toFixed(2)}" cy="${jy.toFixed(2)}" rx="0.8" ry="0.5"/>`);
-        continue;
-      }
-      if (kind !== "grass") continue;
-      if (distToPolyline(cc, cr, trailGrid) < 0.7) continue;
-      const inForest = clusters.some((c) => Math.hypot(col - c.col, row - c.row) < c.r);
-      if (inForest && rand() < 0.72) {
-        const jc = cc + (rand() - 0.5) * 0.6, jr = cr + (rand() - 0.5) * 0.6;
-        const jx = isoX(jc, jr), jy = isoY(jc, jr);
-        const roll = rand();
-        const s = roll < 0.2 ? 1.3 : roll < 0.55 ? 0.95 : 0.6;
-        const pine = rand() < 0.65;
-        const topFill = pine ? "tree-top" : "tree-top-b";
-        const midFill = pine ? "tree-mid" : "tree-mid-b";
-        trees.push(
-          `<ellipse class="tree-shadow" cx="${(jx + 0.6).toFixed(2)}" cy="${(jy + 0.5).toFixed(2)}" rx="${(1.6 * s).toFixed(2)}" ry="${(0.6 * s).toFixed(2)}"/>` +
-          `<rect class="tree-trunk" x="${(jx - 0.2 * s).toFixed(2)}" y="${(jy - 1.4 * s).toFixed(2)}" width="${(0.4 * s).toFixed(2)}" height="${(1.4 * s).toFixed(2)}"/>` +
-          `<polygon class="${midFill}" points="${jx - 1.8 * s},${jy - 1.2 * s} ${jx + 1.8 * s},${jy - 1.2 * s} ${jx},${jy - 3.4 * s}"/>` +
-          `<polygon class="${topFill}" points="${jx - 1.3 * s},${jy - 2.8 * s} ${jx + 1.3 * s},${jy - 2.8 * s} ${jx},${jy - 5 * s}"/>` +
-          (pine && s > 0.9 ? `<polygon class="${topFill}" points="${jx - 0.9 * s},${jy - 4.2 * s} ${jx + 0.9 * s},${jy - 4.2 * s} ${jx},${jy - 6 * s}"/>` : "")
-        );
-        if (rand() < 0.3) {
-          const fx = isoX(jc + (rand() - 0.5) * 1.2, jr + (rand() - 0.5) * 1.2);
-          const fy = isoY(jc + (rand() - 0.5) * 1.2, jr + (rand() - 0.5) * 1.2);
-          ferns.push(`<path class="fern" d="M${fx},${fy} q-0.8,-0.9 -0.3,-1.8 M${fx},${fy} q0.9,-0.8 0.4,-1.8 M${fx},${fy} q0,-1.1 0,-2"/>`);
-        }
-        if (rand() < 0.06) {
-          const lx = isoX(jc + (rand() - 0.5) * 1.5, jr + (rand() - 0.5) * 1.5);
-          const ly = isoY(jc + (rand() - 0.5) * 1.5, jr + (rand() - 0.5) * 1.5);
-          const ang = rand() * 40 - 20;
-          logs.push(`<rect class="log" x="${(lx - 1.6).toFixed(2)}" y="${(ly - 0.25).toFixed(2)}" width="3.2" height="0.5" rx="0.25" transform="rotate(${ang.toFixed(1)} ${lx.toFixed(2)} ${ly.toFixed(2)})"/>`);
-        }
-      } else if (!inForest && rand() < 0.07) {
-        const jx = isoX(cc, cr), jy = isoY(cc, cr);
-        bushes.push(`<ellipse class="bush-shadow" cx="${(jx + 0.3).toFixed(2)}" cy="${(jy + 0.1).toFixed(2)}" rx="1.3" ry="0.5"/>
-          <ellipse class="bush" cx="${jx.toFixed(2)}" cy="${(jy - 0.4).toFixed(2)}" rx="1.1" ry="0.8"/>
-          <ellipse class="bush-hi" cx="${(jx - 0.3).toFixed(2)}" cy="${(jy - 0.7).toFixed(2)}" rx="0.5" ry="0.35"/>`);
-      } else if (!inForest && rand() < 0.1) {
-        const fx = isoX(cc + (rand() - 0.5) * 0.5, cr + (rand() - 0.5) * 0.5);
-        const fy = isoY(cc + (rand() - 0.5) * 0.5, cr + (rand() - 0.5) * 0.5);
-        ferns.push(`<path class="fern" d="M${fx},${fy} q-0.7,-0.8 -0.25,-1.6 M${fx},${fy} q0.8,-0.7 0.35,-1.6 M${fx},${fy} q0,-1 0,-1.8"/>`);
-      }
-    }
-  }
-  el("forest").innerHTML = rocks.join("") + bushes.join("") + logs.join("") + ferns.join("") + trees.join("");
-
-  // a river running roughly west-east through the island, with ripples and foam
-  const waypoints = riverGrid.map(([c, r]) => [isoX(c, r), isoY(c, r)]);
-  const d = "M" + waypoints.map((p) => p.join(",")).join(" L");
-  el("river-bank").setAttribute("d", d);
-  el("river-water").setAttribute("d", d);
-
-  const ripples = [];
-  const reeds = [];
-  for (let col = 1; col < ISO.cols - 1; col += 0.7) {
-    const nearestRow = (() => {
-      // find the row fraction of the river at this column by linear interpolation
-      for (let i = 0; i < riverGrid.length - 1; i++) {
-        const [c0] = riverGrid[i], [c1] = riverGrid[i + 1];
-        if (col >= c0 && col <= c1) {
-          const t = (col - c0) / (c1 - c0 || 1);
-          return riverGrid[i][1] + (riverGrid[i + 1][1] - riverGrid[i][1]) * t;
-        }
-      }
-      return null;
-    })();
-    if (nearestRow === null) continue;
-    if (rand() < 0.4) {
-      const rx = isoX(col, nearestRow), ry = isoY(col, nearestRow);
-      const off = (rand() - 0.5) * 1.6;
-      ripples.push(`<ellipse class="ripple" cx="${(rx + off).toFixed(2)}" cy="${(ry + off * 0.5).toFixed(2)}" rx="${(0.8 + rand() * 0.6).toFixed(2)}" ry="${(0.25 + rand() * 0.15).toFixed(2)}"/>`);
-    }
-    if (rand() < 0.15) {
-      const side = rand() < 0.5 ? -1 : 1;
-      const rx = isoX(col, nearestRow + side * 1.3), ry = isoY(col, nearestRow + side * 1.3);
-      if (rand() < 0.5) {
-        reeds.push(`<path class="reed" d="M${rx},${ry} q0.2,-1.4 -0.1,-2.3 M${rx + 0.3},${ry} q-0.1,-1.3 0.3,-2.1 M${rx - 0.3},${ry} q0.3,-1.1 -0.2,-1.9"/>`);
-      } else {
-        reeds.push(`<ellipse class="lilypad" cx="${rx.toFixed(2)}" cy="${ry.toFixed(2)}" rx="1" ry="0.45"/>`);
-      }
-    }
-  }
-  el("river-detail").innerHTML = ripples.join("") + reeds.join("");
-
-  // shoreline foam where sand meets reef
-  const foam = [];
-  for (let row = 0; row < ISO.rows; row++) {
-    for (let col = 0; col < ISO.cols; col++) {
-      if (classifyTile(col, row) !== "sand") continue;
-      if (classifyTile(col + 1, row) === "reef" || classifyTile(col, row + 1) === "reef" ||
-        classifyTile(col - 1, row) === "reef" || classifyTile(col, row - 1) === "reef") {
-        if (rand() < 0.5) {
-          const fx = isoX(col + 0.5, row + 0.5), fy = isoY(col + 0.5, row + 0.5);
-          foam.push(`<circle class="foam" cx="${fx.toFixed(2)}" cy="${fy.toFixed(2)}" r="${(0.25 + rand() * 0.25).toFixed(2)}"/>`);
-        }
-      }
-    }
-  }
-  el("foam").innerHTML = foam.join("");
-
-  // decorative power line crossing the south-east of the island
-  const PYLON_FRAC = [[0.74, 0.14], [0.79, 0.28], [0.83, 0.44], [0.86, 0.6], [0.89, 0.76]];
-  const pylonPts = PYLON_FRAC.map(([fc, fr]) => [isoX(fc * ISO.cols, fr * ISO.rows), isoY(fc * ISO.cols, fr * ISO.rows)]);
-  let lines = "";
-  for (const [px, py] of pylonPts) {
-    lines += `<line x1="${px}" y1="${py}" x2="${px}" y2="${py - 5}" class="pylon-pole"/>
-      <line x1="${px - 1.6}" y1="${py - 4.6}" x2="${px + 1.6}" y2="${py - 4.6}" class="pylon-pole"/>
-      <line x1="${px - 1.2}" y1="${py - 5}" x2="${px + 1.2}" y2="${py - 4.2}" class="pylon-pole"/>`;
-  }
-  for (let i = 0; i < pylonPts.length - 1; i++) {
-    const [x0, y0] = pylonPts[i], [x1, y1] = pylonPts[i + 1];
-    const midX = (x0 + x1) / 2, midY = (y0 + y1) / 2 - 4.2;
-    lines += `<path class="power-wire" d="M${x0 - 1.6},${y0 - 4.6} Q${midX},${midY} ${x1 - 1.6},${y1 - 4.6}"/>
-      <path class="power-wire" d="M${x0 + 1.6},${y0 - 4.6} Q${midX},${midY} ${x1 + 1.6},${y1 - 4.6}"/>`;
-  }
-  el("powerlines").innerHTML = lines;
-
-  // a couple of parked vehicles near the trail
-  const vehicles = [];
-  const vehicleSpots = [0.3, 0.55, 0.85];
-  for (const vf of vehicleSpots) {
-    let col = null, row = null;
-    for (let i = 0; i < trailGrid.length - 1; i++) {
-      const [c0] = trailGrid[i], [c1] = trailGrid[i + 1];
-      const frac = (ISO.cols * vf - c0) / (c1 - c0 || 1);
-      if (frac >= 0 && frac <= 1) {
-        col = c0 + (c1 - c0) * frac;
-        row = trailGrid[i][1] + (trailGrid[i + 1][1] - trailGrid[i][1]) * frac;
-        break;
-      }
-    }
-    if (col === null) continue;
-    const side = rand() < 0.5 ? -1.6 : 1.6;
-    const vx = isoX(col, row + side), vy = isoY(col, row + side);
-    const bodyColor = rand() < 0.5 ? "#3a4a3a" : "#4a3a2a";
-    vehicles.push(`<ellipse class="vehicle-shadow" cx="${(vx + 0.3).toFixed(2)}" cy="${(vy + 0.6).toFixed(2)}" rx="2.4" ry="0.9"/>
-      <rect x="${(vx - 2.2).toFixed(2)}" y="${(vy - 1.6).toFixed(2)}" width="4.4" height="1.8" rx="0.3" fill="${bodyColor}"/>
-      <rect x="${(vx - 1.2).toFixed(2)}" y="${(vy - 2.4).toFixed(2)}" width="2.2" height="1" rx="0.25" fill="${shade(bodyColor, 0.15)}"/>
-      <circle cx="${(vx - 1.4).toFixed(2)}" cy="${(vy + 0.3).toFixed(2)}" r="0.55" fill="#111"/>
-      <circle cx="${(vx + 1.4).toFixed(2)}" cy="${(vy + 0.3).toFixed(2)}" r="0.55" fill="#111"/>`);
-  }
-  el("vehicles").innerHTML = vehicles.join("");
 }
 
 function updateOverlay(nodes, entryNodeId) {
@@ -598,14 +443,15 @@ function updateOverlay(nodes, entryNodeId) {
 
   const pts = nodes.map(nodeIso);
   const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
-  const pad = 10;
+  const pad = 10 * DETAIL_SCALE;
+  const postR = 0.9 * DETAIL_SCALE;
   const x0 = Math.max(2, Math.min(...xs) - pad), x1 = Math.min(ISO.totalW - 2, Math.max(...xs) + pad);
   const y0 = Math.max(2, Math.min(...ys) - pad), y1 = Math.min(ISO.totalH - 2, Math.max(...ys) + pad);
   const fence = `<rect class="fence" x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}"/>
-    <circle class="fence-post" cx="${x0}" cy="${y0}" r="0.9"/>
-    <circle class="fence-post" cx="${x1}" cy="${y0}" r="0.9"/>
-    <circle class="fence-post" cx="${x0}" cy="${y1}" r="0.9"/>
-    <circle class="fence-post" cx="${x1}" cy="${y1}" r="0.9"/>`;
+    <circle class="fence-post" cx="${x0}" cy="${y0}" r="${postR}"/>
+    <circle class="fence-post" cx="${x1}" cy="${y0}" r="${postR}"/>
+    <circle class="fence-post" cx="${x0}" cy="${y1}" r="${postR}"/>
+    <circle class="fence-post" cx="${x1}" cy="${y1}" r="${postR}"/>`;
 
   svg.innerHTML = roads + fence;
 }
@@ -830,6 +676,66 @@ el("start-btn").onclick = async () => {
   print("operation started. one foothold established -- type \"hosts\".", "ok");
   await refresh();
 };
+
+// -------------------------------------------------------------- map zoom/pan
+
+(function setUpMapZoom() {
+  const map = el("map");
+  const viewport = el("map-viewport");
+  const ZOOM_MIN = 0.5, ZOOM_MAX = 5;
+  // Start zoomed in on the centre of the landmass rather than fit-to-screen --
+  // the whole point is that it's too big to take in at a glance. "reset"
+  // still zooms all the way out to see the whole country in one go.
+  let zoom = 2.2, panX = 0, panY = 0;
+  let dragging = false, dragStartX = 0, dragStartY = 0, dragMoved = false;
+
+  function apply() {
+    viewport.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+  }
+  apply();
+  function setZoom(nextZoom, cx, cy) {
+    nextZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, nextZoom));
+    if (cx !== undefined) {
+      // keep the point under the cursor stationary while zooming
+      const rect = map.getBoundingClientRect();
+      const ox = cx - rect.left - rect.width / 2, oy = cy - rect.top - rect.height / 2;
+      const ratio = nextZoom / zoom;
+      panX = ox - (ox - panX) * ratio;
+      panY = oy - (oy - panY) * ratio;
+    }
+    zoom = nextZoom;
+    apply();
+  }
+
+  map.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    setZoom(zoom * delta, e.clientX, e.clientY);
+  }, { passive: false });
+
+  map.addEventListener("mousedown", (e) => {
+    if (e.button !== 0) return;
+    dragging = true; dragMoved = false;
+    dragStartX = e.clientX - panX; dragStartY = e.clientY - panY;
+    viewport.classList.add("dragging");
+  });
+  window.addEventListener("mousemove", (e) => {
+    if (!dragging) return;
+    const nx = e.clientX - dragStartX, ny = e.clientY - dragStartY;
+    if (Math.abs(nx - panX) > 2 || Math.abs(ny - panY) > 2) dragMoved = true;
+    panX = nx; panY = ny;
+    apply();
+  });
+  window.addEventListener("mouseup", () => {
+    if (dragging) { dragging = false; viewport.classList.remove("dragging"); }
+  });
+  // suppress the node-select click that would otherwise fire right after a drag
+  map.addEventListener("click", (e) => { if (dragMoved) { e.stopPropagation(); dragMoved = false; } }, true);
+
+  el("zoom-in").onclick = () => setZoom(zoom * 1.3);
+  el("zoom-out").onclick = () => setZoom(zoom / 1.3);
+  el("zoom-reset").onclick = () => { zoom = 1; panX = 0; panY = 0; apply(); };
+})();
 
 buildTerrain();
 print("operation blackout -- field terminal", "sys");

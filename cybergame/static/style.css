@@ -24,12 +24,37 @@ header h1 { font-size: 14px; margin: 0; font-weight: 400; letter-spacing: 1px; c
 .meter-bar.warn .meter-fill { box-shadow: 0 0 6px currentColor; }
 
 #map {
-  position: relative; width: 100%; height: 46vh; min-height: 300px; max-height: 460px;
+  position: relative; width: 100%;
+  /* Locked to the background image's own 1536x1024 (3:2) aspect ratio so
+     background-size:cover never has to crop or letterbox -- the container
+     and the image always have identical proportions. This also means node
+     marker percentages line up 1:1 with pixel positions in the image. */
+  aspect-ratio: 1536 / 1024;
   flex: 0 0 auto; overflow: hidden; background: #0e2a33;
   border-bottom: 2px solid #163840;
   box-shadow: inset 0 0 60px rgba(0,0,0,0.6);
 }
+#map-viewport {
+  position: absolute; inset: 0; transform-origin: center center;
+  cursor: grab;
+}
+#map-bg {
+  position: absolute; inset: 0;
+  background-image: url("/static/images/campaign-map.webp");
+  background-size: cover; background-position: center;
+}
+#map-viewport.dragging { cursor: grabbing; }
 #island-svg, #overlay-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+#zoom-controls {
+  position: absolute; right: 8px; bottom: 8px; z-index: 5;
+  display: flex; flex-direction: column; gap: 2px;
+}
+#zoom-controls button {
+  width: 26px; height: 26px; padding: 0; font-size: 15px; line-height: 1;
+  background: rgba(10,14,10,0.8); border: 1px solid #3a4a3a; color: #9fdf9f;
+}
+#zoom-controls button:hover { border-color: #7fef7f; color: #d7ffd7; }
+#zoom-reset { font-size: 11px !important; }
 #overlay-svg { pointer-events: none; }
 #island-svg .river-bank { fill: none; stroke: #1a3a44; stroke-width: 6.4; stroke-linecap: round; stroke-linejoin: round; }
 #island-svg .river-water { fill: none; stroke: #1f5868; stroke-width: 4.6; stroke-linecap: round; stroke-linejoin: round; }
@@ -64,6 +89,23 @@ header h1 { font-size: 14px; margin: 0; font-weight: 400; letter-spacing: 1px; c
 .pylon-pole { stroke: #4a4a42; stroke-width: 0.35; opacity: 0.75; }
 .power-wire { fill: none; stroke: #2a2a24; stroke-width: 0.18; opacity: 0.6; }
 .vehicle-shadow { fill: #000; opacity: 0.25; }
+.paved-road { fill: none; stroke: #3a3a38; stroke-linecap: round; stroke-linejoin: round; }
+.paved-road-edge { fill: none; stroke: #222; stroke-linecap: round; stroke-linejoin: round; }
+.road-marking { stroke: #d8c94a; stroke-dasharray: 1 1.2; opacity: 0.8; }
+.city-shadow { fill: #000; opacity: 0.22; }
+.flag-pole { stroke: #333; stroke-width: 0.25; }
+.flag-cloth { fill: #b03030; }
+.boat-hull { fill: #4a4038; }
+.boat-cabin { fill: #6b6058; }
+.dock-plank { stroke: #4a3a22; stroke-width: 0.4; opacity: 0.8; }
+.runway-base { fill: #333330; }
+.runway-stripe { stroke: #cfcf9a; stroke-dasharray: 2 1.4; }
+.plane-body { fill: #8a8a86; }
+.plane-wing { fill: #6b6b68; }
+.flower { opacity: 0.85; }
+.tuft { fill: none; stroke: #4a6a2a; stroke-width: 0.18; opacity: 0.6; stroke-linecap: round; }
+.tributary-bank { fill: none; stroke: #1a3a44; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+.tributary-water { fill: none; stroke: #1f5868; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .road { fill: none; stroke: #6b5a38; stroke-width: 1.1; stroke-linecap: round; opacity: 0.55; }
 .fence { fill: none; stroke: #caa86a; stroke-width: 0.8; stroke-dasharray: 2 1.6; opacity: 0.85; }
 .fence-post { fill: #caa86a; opacity: 0.9; }

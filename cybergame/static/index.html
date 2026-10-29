@@ -27,19 +27,33 @@
 </div>
 
 <div id="map">
-  <svg id="island-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-    <rect x="0" y="0" width="100" height="100" fill="#0e2a33"/>
-    <g id="island-tiles"></g>
-    <path id="river-bank" class="river-bank"/>
-    <path id="river-water" class="river-water"/>
-    <g id="river-detail"></g>
-    <g id="foam"></g>
-    <g id="forest"></g>
-    <g id="powerlines"></g>
-    <g id="vehicles"></g>
-  </svg>
-  <svg id="overlay-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
-  <div id="map-nodes"></div>
+  <div id="map-viewport">
+    <div id="map-bg"></div>
+    <svg id="island-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      <g id="island-tiles"></g>
+      <path id="river-bank" class="river-bank"/>
+      <path id="river-water" class="river-water"/>
+      <path id="tributary-bank" class="tributary-bank"/>
+      <path id="tributary-water" class="tributary-water"/>
+      <g id="river-detail"></g>
+      <g id="foam"></g>
+      <g id="forest"></g>
+      <g id="powerlines"></g>
+      <g id="vehicles"></g>
+      <g id="roads-paved"></g>
+      <g id="city-blocks"></g>
+      <g id="airstrip"></g>
+      <g id="dock"></g>
+      <g id="flags"></g>
+    </svg>
+    <svg id="overlay-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
+    <div id="map-nodes"></div>
+  </div>
+  <div id="zoom-controls">
+    <button id="zoom-in" aria-label="zoom in">+</button>
+    <button id="zoom-reset" aria-label="reset zoom">&#x25a2;</button>
+    <button id="zoom-out" aria-label="zoom out">&minus;</button>
+  </div>
 </div>
 
 <div id="term-wrap">
