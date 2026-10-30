@@ -11,34 +11,49 @@ well) and uses roles enforced by who is allowed to touch what.
 [Briefing pack](docs/BRIEFING_PACK.md) (briefing, role cards, exploit sheets) ·
 [DM guide](docs/DM_GUIDE.md)
 
-## What is running where
+## Quick start
 
-This is built and running on **orochiman-EQ (192.168.26.251, Tailscale
-100.95.90.71)** in Docker. The project lives at
-`/home/orochiman/Projects/cadet-cyber-game`.
+You need Docker. If you don't have it, the setup script will install it for
+you.
 
-- Main screen (cadets): `http://192.168.26.251:8000/`
-- DM console (you): `http://192.168.26.251:8000/dm`
+**Windows (PowerShell):**
 
-Both work over Tailscale too, at `100.95.90.71` instead of the `.251` address,
-if you're running the session from somewhere not on that LAN.
-
-## Starting and stopping it
-
-On orochiman-EQ (192.168.26.251):
-
-```bash
-cd /home/orochiman/Projects/cadet-cyber-game
-sudo docker compose up -d --build    # build and start
-sudo docker compose restart          # restart without rebuilding
-sudo docker compose down             # stop it
-sudo docker logs -f cadet-cyber-game # watch it run
+```powershell
+.\setup.ps1
 ```
 
-If you edit `scenario/blackout.yaml` only, you don't need to rebuild —
-it's mounted read-only into the container, so a `restart` picks it up.
-If you edit anything under `cybergame/` (the server or the browser
-screen), you need `up -d --build` to bake the change into the image.
+If PowerShell blocks the script the first time, run this once first:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+**Linux or macOS:**
+
+```bash
+./setup.sh
+```
+
+Either script checks for Docker, installs it if it's missing, waits for the
+Docker daemon to come up, then builds and starts the game. When it finishes
+it prints the URL — by default:
+
+- Main screen (cadets): `http://localhost:8000/`
+- DM console (you): `http://localhost:8000/dm`
+
+## Running it yourself, without the script
+
+```bash
+docker compose up -d --build    # build and start
+docker compose restart          # restart without rebuilding
+docker compose down             # stop it
+docker logs -f cadet-cyber-game # watch it run
+```
+
+If you edit `scenario/blackout.yaml` only, you don't need to rebuild — it's
+mounted read-only into the container, so a `restart` picks it up. If you edit
+anything under `cybergame/` (the server or the browser screen), you need
+`up -d --build` to bake the change into the image.
 
 ## How the hour runs
 
@@ -113,25 +128,15 @@ it depends on. To add a card: give it an `id` under `cards`, a `recon` cost,
 effect types: `disable`, `flag`, `counter`, `noise`, `pin`, `hint`,
 `random_disable`).
 
-## Local development (not the eq box)
-
-If you want to run it somewhere other than the eq box, e.g. your own
-machine, to test scenario changes before pushing them:
+## Developing without Docker
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+.venv/bin/pip install -r requirements.txt    # Windows: .venv\Scripts\pip
 .venv/bin/uvicorn cybergame.server:app --reload --port 8000
 ```
 
-Or with Docker locally:
-
-```bash
-docker compose up --build
-```
-
-Run the test suite (28 tests, covering the dependency graph, the dice
-tiers, confirmation prompts, and the API):
+Run the test suite:
 
 ```bash
 .venv/bin/python -m pytest -q
@@ -140,9 +145,13 @@ tiers, confirmation prompts, and the API):
 ## What's not built yet
 
 - The physical box (Pi, LEDs, big roll button). Everything today is
-  screen-only, by design — see the conversation history for why.
+  screen-only, by design.
 - Printed exploit sheet cards and role cue cards — the `/dm` page lists the
   sheet names and debrief links as plain text; turning them into something
   printable is a small follow-on task.
 - A scoring summary screen at the end of the hour. Right now the DM reads
-  the meters and the node states off the screen for the debrief by eye.
+  the meters, the collateral total, and the node states off the screen for
+  the debrief by eye.
+- Lockdown and attribution thresholds are reported but not enforced — see
+  [DM_GUIDE.md](docs/DM_GUIDE.md) for the full list of things the DM has to
+  adjudicate by hand.

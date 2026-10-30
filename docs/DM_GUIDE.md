@@ -5,11 +5,18 @@ cadets look at the main screen on the TV or projector. Both pull from the
 same live game, so anything you do shows up on their screen within 2
 seconds.
 
+If the game is running on the same machine you're both looking at, both
+screens are just `localhost`. If it's running on a separate box (a spare
+laptop plugged into the TV, say), use that machine's address on your
+network instead of `localhost` on every other device — for example
+`http://192.168.1.50:8000/`. Find that address on the host machine with
+`ipconfig` (Windows) or `ip addr` / `ifconfig` (Linux/macOS).
+
 ## Before the session
 
-1. On orochiman-EQ (192.168.26.251): confirm the container is up —
-   `sudo docker ps --filter name=cadet-cyber-game`. If it isn't,
-   `cd ~/Projects/cadet-cyber-game && sudo docker compose up -d`.
+1. Confirm the container is up — `docker ps --filter name=cadet-cyber-game`.
+   If it isn't, run the setup script again, or
+   `cd cadet-cyber-game && docker compose up -d`.
 2. Hit `/api/reset` once so you start from a clean game — the DM console
    has a **Reset game** button for this.
 3. Print [BRIEFING_PACK.md](BRIEFING_PACK.md): the briefing, four role
