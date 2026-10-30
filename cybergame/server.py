@@ -106,6 +106,15 @@ def get_scenario():
     }
 
 
+@app.post("/api/dm/reveal_all")
+def dm_reveal_all():
+    try:
+        GAME.reveal_all()
+    except GameError as exc:
+        raise HTTPException(400, str(exc))
+    return {"ok": True}
+
+
 @app.get("/api/dm/topology")
 def dm_topology():
     """DM-only: every asset and every link between them, regardless of

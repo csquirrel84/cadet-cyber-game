@@ -238,3 +238,19 @@ def test_every_node_reachable_from_entry(sc):
                 frontier.append(nxt)
     unreachable = set(sc["nodes_by_id"]) - seen
     assert not unreachable, f"unreachable nodes: {unreachable}"
+
+
+def test_reveal_all_shows_every_node_fully_identified(sc):
+    game, _ = make_game(sc)
+    assert len(game.visible) == 1
+    game.reveal_all()
+    assert len(game.visible) == len(sc["nodes_by_id"])
+    assert all(game.known_level[nid] >= 2 for nid in sc["nodes_by_id"])
+
+
+def test_reveal_all_before_start_raises():
+    import cybergame.scenario as scenario_mod
+    sc = scenario_mod.load("scenario/blackout.yaml")
+    game = Game(sc, now_fn=FixedClock(), rng=FixedRng([]))
+    with pytest.raises(GameError, match="not started"):
+        game.reveal_all()

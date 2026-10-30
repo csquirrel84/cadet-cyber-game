@@ -26,6 +26,7 @@
   <h3>Session control</h3>
   <button id="start">Start operation</button>
   <button class="danger" id="reset">Reset game</button>
+  <button class="danger" id="revealAll">Reveal all assets</button>
 
   <h3>Full asset map (DM only &mdash; shows everything, not just what the team has found)</h3>
   <div id="topo-wrap">
@@ -185,6 +186,11 @@ el("jump5").onclick = async () => {
 };
 el("start").onclick = async () => { await api("/api/start", { method: "POST" }); refresh(); };
 el("reset").onclick = async () => { await api("/api/reset", { method: "POST" }); refresh(); };
+el("revealAll").onclick = async () => {
+  if (!confirm("Reveal every asset to the team, fully identified? This cannot be undone without a reset.")) return;
+  await api("/api/dm/reveal_all", { method: "POST" });
+  refresh();
+};
 loadScenario();
 refresh();
 setInterval(refresh, 2000);

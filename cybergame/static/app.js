@@ -359,7 +359,7 @@ const NODE_IMAGE_POS = {
   rail: [420, 500],
 
   // Cluster B -- fed by substation 2 (centre landmass)
-  ps_south: [600, 120],
+  ps_south: [600, 240],
   sub2: [700, 300],
   water_plant: [780, 280],
   fuel_depot: [650, 420],

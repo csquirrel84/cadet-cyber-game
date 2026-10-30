@@ -92,3 +92,12 @@ def test_index_page_served(client):
     res = client.get("/")
     assert res.status_code == 200
     assert b"Cadet cyber game" in res.content
+
+
+def test_dm_reveal_all_shows_every_node(client):
+    client.post("/api/start")
+    res = client.post("/api/dm/reveal_all")
+    assert res.status_code == 200
+    state = client.get("/api/state").json()
+    assert len(state["nodes"]) == len(GAME.nodes)
+    assert all(n["known"] >= 2 for n in state["nodes"])

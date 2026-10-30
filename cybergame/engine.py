@@ -91,6 +91,18 @@ class Game:
     def is_visible(self, node_id):
         return node_id in self.visible
 
+    def reveal_all(self):
+        """DM override: put every asset on the map, fully identified, as if
+        the team had pivoted to and mapped every site themselves. Used for
+        a 'show everything' button on the DM console -- not something the
+        team can trigger."""
+        if not self.started:
+            raise GameError("Game has not started.")
+        self.visible = set(self.nodes.keys())
+        for nid in self.nodes:
+            self.known_level[nid] = max(self.known_level.get(nid, 0), 2)
+        self._log("dm:reveal_all")
+
     def _reveal_neighbors(self, node_id, level):
         if level >= 2:
             self.visible.update(self.sc["neighbors"].get(node_id, []))
