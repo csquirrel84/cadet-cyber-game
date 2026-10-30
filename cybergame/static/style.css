@@ -24,15 +24,25 @@ header h1 { font-size: 14px; margin: 0; font-weight: 400; letter-spacing: 1px; c
 .meter-bar.warn .meter-fill { box-shadow: 0 0 6px currentColor; }
 
 #map {
-  position: relative; width: 100%;
-  /* Locked to the background image's own 1536x1024 (3:2) aspect ratio so
-     background-size:cover never has to crop or letterbox -- the container
-     and the image always have identical proportions. This also means node
-     marker percentages line up 1:1 with pixel positions in the image. */
-  aspect-ratio: 1536 / 1024;
+  position: relative;
+  /* The playable map is only the TOP 838px of the 1536x1024 source image --
+     the bottom ~186px is the legend band, which lives exclusively in the
+     pinned #legend-pinned strip now (it used to also render here as part
+     of the full image, showing the legend twice: once live in the pinned
+     strip, once baked into the scrollable map itself). #map is sized to
+     that cropped content's own 1536:838 ratio, not the full image's 3:2.
+     width is the single explicit dimension, bounded by min() to whichever
+     of "100% of the page" or "a sane max height" (58vh, expressed in width
+     terms as 58vh*1536/838=~106vh) is tighter; aspect-ratio derives height
+     from that. Do not switch this to width:auto/height:auto -- that
+     collapses to zero size on a flex item whose children are all
+     position:absolute (hit this once already, see git history/notes). */
+  width: min(100%, 106vh);
+  aspect-ratio: 1536 / 838;
   flex: 0 0 auto; overflow: hidden; background: #0e2a33;
   border-bottom: 2px solid #163840;
   box-shadow: inset 0 0 60px rgba(0,0,0,0.6);
+  margin: 0 auto;
 }
 #map-viewport {
   position: absolute; inset: 0; transform-origin: center center;
@@ -41,7 +51,10 @@ header h1 { font-size: 14px; margin: 0; font-weight: 400; letter-spacing: 1px; c
 #map-bg {
   position: absolute; inset: 0;
   background-image: url("/static/images/campaign-map.webp");
-  background-size: cover; background-position: center;
+  /* 100% auto scales the FULL image to this element's width, same scale as
+     #legend-pinned uses; background-position:top crops off the legend band
+     at the bottom via #map's own overflow:hidden, instead of showing it. */
+  background-size: 100% auto; background-position: center top; background-repeat: no-repeat;
 }
 #map-viewport.dragging { cursor: grabbing; }
 #island-svg, #overlay-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -55,6 +68,32 @@ header h1 { font-size: 14px; margin: 0; font-weight: 400; letter-spacing: 1px; c
 }
 #zoom-controls button:hover { border-color: #7fef7f; color: #d7ffd7; }
 #zoom-reset { font-size: 11px !important; }
+
+#legend-toggle {
+  position: absolute; left: 8px; bottom: 8px; z-index: 7;
+  background: rgba(10,14,10,0.85); border: 1px solid #3a4a3a; color: #9fdf9f;
+  font-size: 10px; letter-spacing: 1px; padding: 4px 8px;
+}
+#legend-toggle:hover { border-color: #7fef7f; color: #d7ffd7; }
+/* The real legend band cropped straight out of the same image (the legend
+   sits in the bottom 186px of the 1024px-tall source, y=838-1024) -- not
+   redrawn by hand. Pinned as a sibling of #map-viewport, so the zoom/pan
+   CSS transform on the viewport never touches it: background-size:100% auto
+   scales the FULL image to this element's own width (matching the live map
+   at zoom 1, same scale #map-bg uses), then background-position:bottom +
+   a fixed height crop to only the bottom slice, i.e. exactly the legend
+   strip. Height is 186/838=22.2% of #map's own height -- #map's height is
+   now the CONTENT-only 838px (the legend band is cropped out of it, see
+   #map-bg above), not the full 1024px, so this must stay based on 838 to
+   keep the same on-screen pixel scale as the main map. */
+#legend-pinned {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 6;
+  height: 22.2%; overflow: hidden; pointer-events: none;
+  background-image: url("/static/images/campaign-map.webp");
+  background-size: 100% auto; background-position: center bottom; background-repeat: no-repeat;
+  border-top: 1px solid #3a4a3a;
+}
+#legend-pinned.hidden { display: none; }
 #overlay-svg { pointer-events: none; }
 #island-svg .river-bank { fill: none; stroke: #1a3a44; stroke-width: 6.4; stroke-linecap: round; stroke-linejoin: round; }
 #island-svg .river-water { fill: none; stroke: #1f5868; stroke-width: 4.6; stroke-linecap: round; stroke-linejoin: round; }

@@ -327,38 +327,56 @@ function islandRadius(theta) {
   return 46 + 4 * Math.sin(3 * theta + 1) + 3 * Math.cos(5 * theta + 0.5) + 2 * Math.sin(7 * theta + 2);
 }
 
-/** Hand-calibrated against the actual pins drawn in campaign-map.webp
- * (1536x1024). Values are [x%, y%] of the full image -- this lines up
- * exactly with #map-bg because #map is aspect-locked to the same 3:2 ratio,
- * so a percentage of the container is the same percentage of the image.
+// The source image (campaign-map.webp) is 1536x1024. Its bottom 186px is
+// the legend band, which now lives only in #legend-pinned -- #map-bg crops
+// it out and #map is sized to the remaining 1536x838 content area. Both
+// IMAGE_W/IMAGE_H and CONTENT_H are the single source of truth for that
+// split; if the image or the crop line ever changes, this is the only
+// place that needs updating.
+const SRC_IMAGE_W = 1536, SRC_IMAGE_H = 1024, SRC_CONTENT_H = 838;
+
+/** Hand-calibrated against the actual pins drawn in campaign-map.webp.
+ * Values are raw [x, y] pixel coordinates in the source image's own
+ * 1536x1024 space (easiest to eyeball against the picture). Converted to
+ * percent-of-#map (the cropped 1536x838 content area) by nodePercent().
  * Best-effort single pass without pixel-level zoom tooling: some of the
  * visually-similar small badges (substation vs rail, the two hidden-feeder
  * greens) are closer guesses than the clearly distinct ones (power
  * stations, hospital cross, radar dishes, air base runway, bunker
  * crosshair). Easy to nudge -- it's just numbers in this table. */
 const NODE_IMAGE_POS = {
-  ps_north: [9.6, 11.5],
-  ps_south: [76.3, 6.3],
-  sub1: [49.6, 43.0],
-  sub2: [69.5, 42.9],
-  sub3: [10.7, 48.0],
-  hospital: [57.1, 32.2],
-  homes_east: [13.9, 32.6],
-  homes_west: [66.3, 22.7],
-  rail: [69.0, 52.7],
-  water_plant: [36.4, 24.6],
-  telecoms: [47.3, 13.5],
-  fuel_depot: [27.8, 41.7],
-  civil_radar: [79.8, 31.1],
-  mil_radar: [75.3, 34.6],
-  mil_comms: [90.3, 13.5],
-  air_base: [75.3, 53.7],
-  airdef: [58.3, 39.4],
-  bunker: [57.9, 61.3],
-  feed_1b: [15.0, 27.0],
-  feed_3b: [83.3, 40.0],
-  gen_ad: [19.9, 41.9],
+  ps_north: [147, 118],
+  ps_south: [1172, 65],
+  sub1: [762, 440],
+  sub2: [1068, 439],
+  sub3: [164, 491],
+  hospital: [877, 330],
+  homes_east: [214, 334],
+  homes_west: [1019, 232],
+  rail: [1061, 540],
+  water_plant: [559, 252],
+  telecoms: [726, 138],
+  fuel_depot: [427, 427],
+  civil_radar: [1226, 318],
+  mil_radar: [1157, 354],
+  mil_comms: [1387, 138],
+  air_base: [1157, 550],
+  airdef: [896, 403],
+  bunker: [890, 628],
+  feed_1b: [231, 277],
+  feed_3b: [1280, 410],
+  gen_ad: [306, 429],
 };
+
+/** A calibrated node's image pixel position, converted to percent of #map
+ * (the cropped 1536xSRC_CONTENT_H content area the legend band is excluded
+ * from) -- NOT percent of the full source image, since #map no longer
+ * shows the full image. X is simple (no horizontal crop); Y divides by
+ * SRC_CONTENT_H rather than SRC_IMAGE_H. */
+function imagePosPercent(id) {
+  const [px, py] = NODE_IMAGE_POS[id];
+  return [(px / SRC_IMAGE_W) * 100, (py / SRC_CONTENT_H) * 100];
+}
 
 /** A node's pos is a 0-100 percent pair from the scenario file. Map it onto
  * the iso grid, then project to iso screen units (shared by tiles, roads,
@@ -369,14 +387,14 @@ function nodeGrid(n) {
 }
 function nodeIso(n) {
   if (NODE_IMAGE_POS[n.id]) {
-    const [px, py] = NODE_IMAGE_POS[n.id];
+    const [px, py] = imagePosPercent(n.id);
     return [(px / 100) * ISO.totalW, (py / 100) * ISO.totalH];
   }
   const [col, row] = nodeGrid(n);
   return [isoX(col, row), isoY(col, row)];
 }
 function nodePercent(n) {
-  if (NODE_IMAGE_POS[n.id]) return NODE_IMAGE_POS[n.id];
+  if (NODE_IMAGE_POS[n.id]) return imagePosPercent(n.id);
   const [x, y] = nodeIso(n);
   return [(x / ISO.totalW) * 100, (y / ISO.totalH) * 100];
 }
@@ -735,6 +753,10 @@ el("start-btn").onclick = async () => {
   el("zoom-in").onclick = () => setZoom(zoom * 1.3);
   el("zoom-out").onclick = () => setZoom(zoom / 1.3);
   el("zoom-reset").onclick = () => { zoom = 1; panX = 0; panY = 0; apply(); };
+
+  // legend is pinned (lives outside #map-viewport, so zoom/pan never moves
+  // it) and starts open; the toggle just hides it if it's in the way.
+  el("legend-toggle").onclick = () => el("legend-pinned").classList.toggle("hidden");
 })();
 
 buildTerrain();
