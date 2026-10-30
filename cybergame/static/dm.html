@@ -4,10 +4,18 @@
 <meta charset="utf-8">
 <title>DM console</title>
 <link rel="stylesheet" href="/static/style.css">
+<style>
+  html, body { height: auto; min-height: 100%; overflow: auto; display: block; }
+  #topo-wrap { background: #0a0c0a; border: 1px solid #2a2e33; border-radius: 4px; padding: 8px; margin-top: 8px; }
+  #topo-map { width: 100%; height: 560px; display: block; }
+  #topo-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11px; color: #9aa0a6; margin-top: 8px; }
+  #topo-legend span { display: inline-flex; align-items: center; gap: 4px; }
+  #topo-legend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+</style>
 </head>
 <body>
 <header><h1>DM console</h1></header>
-<div style="padding:16px;max-width:600px">
+<div style="padding:16px;max-width:900px">
   <p>Clock: <span id="clock">0:00</span> (<span id="phase"></span>)</p>
   <p>Noise: <span id="noise"></span> &nbsp; Trace: <span id="trace"></span> &nbsp; Collateral points: <span id="collateral"></span></p>
 
@@ -18,6 +26,19 @@
   <h3>Session control</h3>
   <button id="start">Start operation</button>
   <button class="danger" id="reset">Reset game</button>
+
+  <h3>Full asset map (DM only &mdash; shows everything, not just what the team has found)</h3>
+  <div id="topo-wrap">
+    <svg id="topo-map" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div id="topo-legend">
+      <span><i style="background:#555"></i>not discovered</span>
+      <span><i style="background:#4dff8f"></i>up, discovered</span>
+      <span><i style="background:#e24b4a"></i>down</span>
+      <span><i style="background:#ffb347"></i>protected site</span>
+      <span><i style="background:#9b6bff"></i>neutralised (win condition)</span>
+      <span><i style="background:#fff;border:1px solid #000"></i>foothold</span>
+    </div>
+  </div>
 
   <h3>Briefing</h3>
   <pre id="briefing" style="white-space:pre-wrap;font-size:13px;color:#cfd3d8"></pre>
@@ -34,6 +55,108 @@ async function api(path, opts) {
   const res = await fetch(path, opts);
   return res.json();
 }
+
+/** Lays out the graph in layers by BFS depth from the power sources,
+ * then orders each layer by the average x of its already-placed parent
+ * layer (a simple barycenter sweep) to cut down on crossing lines. This
+ * replaces the scenario's own cadet-facing map positions entirely --
+ * those were laid out for fog-of-war discovery, not for a clear diagram
+ * of the whole graph at once. */
+function layoutTopology(topo) {
+  const adj = {};
+  for (const n of topo.nodes) adj[n.id] = [];
+  for (const e of topo.edges) { adj[e.from].push(e.to); adj[e.to].push(e.from); }
+
+  const roots = topo.nodes.filter((n) => n.type === "power station").map((n) => n.id);
+  const depth = {};
+  const queue = roots.map((id) => ({ id, d: 0 }));
+  roots.forEach((id) => { depth[id] = 0; });
+  while (queue.length) {
+    const { id, d } = queue.shift();
+    for (const nb of adj[id]) {
+      if (!(nb in depth)) { depth[nb] = d + 1; queue.push({ id: nb, d: d + 1 }); }
+    }
+  }
+  const reachedDepths = Object.values(depth);
+  const fallbackDepth = (reachedDepths.length ? Math.max(...reachedDepths) : 0) + 1;
+  for (const n of topo.nodes) if (!(n.id in depth)) depth[n.id] = fallbackDepth;
+
+  const layers = {};
+  for (const n of topo.nodes) (layers[depth[n.id]] ||= []).push(n.id);
+  const maxD = Math.max(...Object.keys(layers).map(Number));
+  const width = 100;
+  const margin = 6;
+
+  const x = {};
+  function setLayerX(d) {
+    const ids = layers[d];
+    const w = ids.length;
+    const usable = width - margin * 2;
+    ids.forEach((id, i) => { x[id] = w === 1 ? width / 2 : (i / (w - 1)) * usable + margin; });
+  }
+  setLayerX(0);
+  for (let d = 1; d <= maxD; d++) {
+    layers[d].sort((a, b) => {
+      const pa = adj[a].filter((nb) => depth[nb] === d - 1).map((nb) => x[nb]);
+      const pb = adj[b].filter((nb) => depth[nb] === d - 1).map((nb) => x[nb]);
+      const ax = pa.length ? pa.reduce((s, v) => s + v, 0) / pa.length : width / 2;
+      const bx = pb.length ? pb.reduce((s, v) => s + v, 0) / pb.length : width / 2;
+      return ax - bx;
+    });
+    setLayerX(d);
+  }
+
+  const pos = {};
+  for (const n of topo.nodes) {
+    const y = maxD === 0 ? 50 : 8 + (depth[n.id] / maxD) * 84;
+    pos[n.id] = [x[n.id], y];
+  }
+  return { pos, width };
+}
+
+function nodeColor(n) {
+  if (n.neutralised) return "#9b6bff";
+  if (!n.visible) return "#555";
+  if (n.protected) return "#ffb347";
+  return n.up ? "#4dff8f" : "#e24b4a";
+}
+
+function renderTopology(topo) {
+  const byId = {};
+  for (const n of topo.nodes) byId[n.id] = n;
+  const { pos, width } = layoutTopology(topo);
+  const svg = el("topo-map");
+  svg.setAttribute("viewBox", `0 0 ${width} 100`);
+  svg.removeAttribute("width");
+
+  const parts = [];
+  for (const e of topo.edges) {
+    const a = byId[e.from], b = byId[e.to];
+    if (!a || !b) continue;
+    const [ax, ay] = pos[e.from], [bx, by] = pos[e.to];
+    const dash = e.kind === "hidden" ? ' stroke-dasharray="1.5 1.2"' : "";
+    const opacity = (a.visible && b.visible) ? 0.8 : 0.3;
+    parts.push(`<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="#6b7076" stroke-width="0.3" opacity="${opacity}"${dash}/>`);
+  }
+  function shortLabel(name) { return name.length > 15 ? name.slice(0, 14) + "…" : name; }
+
+  let i = 0;
+  for (const n of topo.nodes) {
+    const [x, y] = pos[n.id];
+    const r = n.hidden ? 0.9 : 1.3;
+    const color = nodeColor(n);
+    const isEntry = n.id === topo.entry_node;
+    const tier = i++ % 3;
+    const ty = tier === 0 ? y - r - 0.7 : tier === 1 ? y + r + 2.1 : y + r + 4.1;
+    parts.push(`<g>
+      <title>${n.name}</title>
+      <circle cx="${x}" cy="${y}" r="${r}" fill="${color}" stroke="${isEntry ? '#fff' : '#000'}" stroke-width="${isEntry ? 0.5 : 0.15}" opacity="${n.hidden ? 0.7 : 1}"/>
+      <text x="${x}" y="${ty}" font-size="1.3" fill="#dfe6e3" text-anchor="middle">${shortLabel(n.name)}</text>
+    </g>`);
+  }
+  svg.innerHTML = parts.join("");
+}
+
 async function refresh() {
   const state = await api("/api/state");
   el("clock").textContent = Math.floor(state.minutes) + ":" + String(Math.floor((state.minutes % 1) * 60)).padStart(2, "0");
@@ -41,6 +164,8 @@ async function refresh() {
   el("noise").textContent = state.meters.noise + " / " + state.meters.noise_lockdown;
   el("trace").textContent = state.meters.trace + " / " + state.meters.trace_attributed;
   el("collateral").textContent = state.collateral_points;
+  const topo = await api("/api/dm/topology");
+  renderTopology(topo);
 }
 async function loadScenario() {
   const sc = await api("/api/scenario");

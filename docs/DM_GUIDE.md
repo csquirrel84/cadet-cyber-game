@@ -71,6 +71,16 @@ links](CARD_REFERENCE.md) — Stuxnet, the Ukraine grid, Oldsmar, Mirai,
 Colonial Pipeline — and connect each one to something the team actually
 did this session.
 
+## Full asset map
+
+The DM console also shows every site and every link between them, all at
+once, regardless of what the team has actually discovered -- the main
+screen never shows this. Grey dots are undiscovered, green is up, red is
+down, amber is a protected site, purple means a win-condition site has
+been neutralised, and the foothold has a white ring. It's there so you can
+see at a glance how far the team has to go, and plan the minute-40 twist
+around a site they genuinely haven't reached yet rather than guessing.
+
 ## DM console controls
 
 | Control | Does |

@@ -106,6 +106,46 @@ def get_scenario():
     }
 
 
+@app.get("/api/dm/topology")
+def dm_topology():
+    """DM-only: every asset and every link between them, regardless of
+    whether the team has pivoted to it yet. Used for the full map on the
+    DM console -- never sent to the main screen."""
+    nodes = []
+    for nid, n in SC["nodes_by_id"].items():
+        nodes.append({
+            "id": nid,
+            "name": n["name"],
+            "type": n["type"],
+            "pos": n.get("pos"),
+            "hidden": n.get("hidden", False),
+            "protected": n.get("protected", False),
+            "up": GAME.is_up(nid) if GAME.started else True,
+            "known": GAME.known_level.get(nid, 0),
+            "visible": GAME.is_visible(nid),
+            "neutralised": GAME.is_neutralised(nid) if n["type"] in ("air defence", "air base", "objective") else None,
+        })
+
+    seen = set()
+    edges = []
+    for nid, neighbors in SC["neighbors"].items():
+        for other in neighbors:
+            key = tuple(sorted((nid, other)))
+            if key in seen:
+                continue
+            seen.add(key)
+            edges.append({"from": key[0], "to": key[1], "kind": "link"})
+    for nid, deep in SC["deep_neighbors"].items():
+        for other in deep:
+            key = tuple(sorted((nid, other)))
+            if key in seen:
+                continue
+            seen.add(key)
+            edges.append({"from": key[0], "to": key[1], "kind": "hidden"})
+
+    return {"nodes": nodes, "edges": edges, "entry_node": SC["entry_node"]}
+
+
 @app.post("/api/start")
 def start_game():
     try:

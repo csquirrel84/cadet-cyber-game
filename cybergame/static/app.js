@@ -344,28 +344,44 @@ const SRC_IMAGE_W = 1536, SRC_IMAGE_H = 1024, SRC_CONTENT_H = 838;
  * greens) are closer guesses than the clearly distinct ones (power
  * stations, hospital cross, radar dishes, air base runway, bunker
  * crosshair). Easy to nudge -- it's just numbers in this table. */
+// Positions are grouped by power dependency, not by which badge icon
+// happens to look right -- a substation and everything it feeds sit
+// together on the map, same as the logic graph says they should. See
+// scenario/blackout.yaml's needs/sources for the ground truth this
+// layout follows. Nudge individual numbers freely; just keep each
+// cluster's members near each other when you do.
 const NODE_IMAGE_POS = {
-  ps_north: [147, 118],
-  ps_south: [1172, 65],
-  sub1: [762, 440],
-  sub2: [1068, 439],
-  sub3: [164, 491],
-  hospital: [877, 330],
-  homes_east: [214, 334],
-  homes_west: [1019, 232],
-  rail: [1061, 540],
-  water_plant: [559, 252],
-  telecoms: [726, 138],
-  fuel_depot: [427, 427],
-  civil_radar: [1226, 318],
-  mil_radar: [1157, 354],
-  mil_comms: [1387, 138],
-  air_base: [1157, 550],
-  airdef: [896, 403],
-  bunker: [890, 628],
-  feed_1b: [231, 277],
-  feed_3b: [1280, 410],
-  gen_ad: [306, 429],
+  // Cluster A -- fed by substation 1 (west landmass)
+  ps_north: [180, 150],
+  sub1: [300, 350],
+  hospital: [350, 480],
+  homes_east: [220, 420],
+  rail: [420, 500],
+
+  // Cluster B -- fed by substation 2 (centre landmass)
+  ps_south: [600, 120],
+  sub2: [700, 300],
+  water_plant: [780, 280],
+  fuel_depot: [650, 420],
+  mil_radar: [850, 250],
+  air_base: [900, 400],
+
+  // Cluster C -- fed by substation 3 (east landmass)
+  sub3: [1150, 300],
+  civil_radar: [1250, 200],
+  telecoms: [1100, 150],
+  mil_comms: [1300, 250],
+  homes_west: [1350, 400],
+
+  // Air defence's own feeder/generator cluster -- between A and C,
+  // since it draws from feed_1b (sub1) and feed_3b (sub3) both
+  feed_1b: [500, 650],
+  airdef: [750, 700],
+  gen_ad: [750, 780],
+  feed_3b: [1000, 650],
+
+  // The objective -- only reachable via mil_comms (cluster C)
+  bunker: [1150, 750],
 };
 
 /** A calibrated node's image pixel position, converted to percent of #map
