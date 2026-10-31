@@ -254,3 +254,28 @@ def test_reveal_all_before_start_raises():
     game = Game(sc, now_fn=FixedClock(), rng=FixedRng([]))
     with pytest.raises(GameError, match="not started"):
         game.reveal_all()
+
+
+def test_default_start_uses_first_foothold(sc):
+    game = Game(sc, now_fn=FixedClock(), rng=FixedRng([]))
+    game.start()
+    first = sc["footholds"][0]
+    assert game.entry_node == first["node"]
+    assert game.visible == {first["node"]}
+    assert game.noise == first.get("noise", 0)
+    assert game.trace == first.get("trace", 0)
+
+
+def test_chosen_foothold_sets_entry_and_starting_meters(sc):
+    game = Game(sc, now_fn=FixedClock(), rng=FixedRng([]))
+    game.start("contractor_laptop")
+    assert game.entry_node == "contractor"
+    assert game.visible == {"contractor"}
+    assert game.noise == 0
+    assert game.trace == 2
+
+
+def test_unknown_foothold_raises(sc):
+    game = Game(sc, now_fn=FixedClock(), rng=FixedRng([]))
+    with pytest.raises(GameError, match="No such foothold"):
+        game.start("not_a_real_foothold")

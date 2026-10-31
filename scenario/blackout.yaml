@@ -1,6 +1,33 @@
 title: "Operation Blackout"
 entry_node: sub1
 
+# Footholds: the player team picks one cover story before Start. Each one
+# is a different node to begin on, with its own starting noise/trace --
+# the cost of however they got in. footholds[0] is also the fallback used
+# if start() is ever called with no foothold id.
+footholds:
+  - id: insider
+    name: "Insider at the utility"
+    node: sub1
+    text: "A contact on the inside, with legitimate access to the grid control systems."
+    noise: 0
+    trace: 0
+    note: "Clean start, but furthest from the objective."
+  - id: contractor_laptop
+    name: "Contractor's laptop"
+    node: contractor
+    text: "A maintenance firm's laptop, with remote access the defenders forgot to revoke."
+    noise: 0
+    trace: 2
+    note: "Fast route in, but already a little exposed."
+  - id: phished_staffer
+    name: "Phished staffer"
+    node: homes_west
+    text: "A member of staff who opened the wrong attachment."
+    noise: 2
+    trace: 0
+    note: "Flexible access, but it made some noise going in."
+
 briefing_minutes: 10
 strike_not_before: 35
 strike_minute: 50

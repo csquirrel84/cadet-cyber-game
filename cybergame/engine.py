@@ -54,13 +54,38 @@ class Game:
         self.last_result = None
         self.outcome = None
 
-    def start(self):
+        self.entry_node = None
+        self.foothold_id = None
+
+    def start(self, foothold_id=None):
+        """Start the game at the given foothold (a scenario-defined cover
+        story), or the scenario's default entry_node if the scenario has
+        no footholds defined / none was chosen. A foothold can carry its
+        own starting noise and trace -- the cost of whatever got the team
+        in."""
         if self.started:
             raise GameError("Already started.")
+        foothold = self._resolve_foothold(foothold_id)
         self.started = True
         self.t0 = self.now_fn()
-        self.visible.add(self.sc["entry_node"])
-        self._log("started")
+        self.entry_node = foothold["node"] if foothold else self.sc["entry_node"]
+        self.foothold_id = foothold["id"] if foothold else None
+        self.visible.add(self.entry_node)
+        if foothold:
+            self.noise = foothold.get("noise", 0)
+            self.trace = foothold.get("trace", 0)
+        self._log(f"started:{self.entry_node}")
+
+    def _resolve_foothold(self, foothold_id):
+        footholds = self.sc.get("footholds", [])
+        if not footholds:
+            return None
+        if foothold_id is None:
+            return footholds[0]
+        for f in footholds:
+            if f["id"] == foothold_id:
+                return f
+        raise GameError(f"No such foothold: {foothold_id}")
 
     # ------------------------------------------------------------------ time
 

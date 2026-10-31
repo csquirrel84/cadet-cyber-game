@@ -71,6 +71,7 @@ def build(data):
     sc.setdefault("debrief_links", [])
     sc.setdefault("roles", [])
     sc.setdefault("false_flag", {"correct": None, "groups": []})
+    sc.setdefault("footholds", [])
     _build_adjacency(sc)
     _validate(sc)
     return sc
@@ -137,6 +138,13 @@ def _build_adjacency(sc):
 def _validate(sc):
     errors = []
     nodes = sc["nodes_by_id"]
+    foothold_ids = set()
+    for f in sc.get("footholds", []):
+        if f.get("id") in foothold_ids:
+            errors.append(f"duplicate foothold id {f.get('id')}")
+        foothold_ids.add(f.get("id"))
+        if f.get("node") not in nodes:
+            errors.append(f"foothold {f.get('id')}: unknown node {f.get('node')}")
     for nid, n in nodes.items():
         for req in n["needs"]:
             for src in req["sources"]:

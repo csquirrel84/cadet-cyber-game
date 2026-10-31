@@ -1,5 +1,7 @@
 let lastState = null;
 let selectedCallsign = null;
+let footholds = null;       // fetched once, pre-start
+let selectedFoothold = null; // id of the chosen foothold, pre-start
 let armed = null;      // { kind: 'scan'|'run', nodeId, level|card }
 let awaitingConfirm = null; // { nodeId, card, roll }
 
@@ -490,6 +492,37 @@ function updateOverlay(nodes, entryNodeId) {
   svg.innerHTML = roads + fence;
 }
 
+/** Pre-start only: draw the foothold options as selectable markers on
+ * the same map, instead of the (empty, nothing pivoted to yet) node
+ * list. Hover shows the cover story and its starting noise/trace;
+ * clicking selects it (only one at a time) and arms the Start button. */
+function renderFootholdChoice(list) {
+  const layer = el("map-nodes");
+  layer.innerHTML = "";
+  for (const f of list) {
+    const div = document.createElement("div");
+    div.className = "node foothold-choice";
+    if (f.id === selectedFoothold) div.classList.add("selected");
+    const [x, y] = nodePercent({ id: f.node, pos: f.pos });
+    div.style.left = x + "%";
+    div.style.top = y + "%";
+    div.title = `${f.text} Noise: ${f.noise}, Trace: ${f.trace}. (${f.note || ""})`.replace(" ()", "");
+    div.innerHTML = `
+      <div class="sprite-wrap">
+        <div class="corner tl"></div><div class="corner tr"></div>
+        <div class="corner bl"></div><div class="corner br"></div>
+        <svg class="sprite" viewBox="0 0 32 40" aria-hidden="true">${FOG_SPRITE}</svg>
+      </div>
+      <div class="n-name">${f.name}</div>`;
+    div.onclick = () => {
+      selectedFoothold = f.id;
+      renderFootholdChoice(list);
+      el("start-btn").disabled = false;
+    };
+    layer.appendChild(div);
+  }
+}
+
 function renderMap(nodes, entryNodeId) {
   const layer = el("map-nodes");
   layer.innerHTML = "";
@@ -533,6 +566,15 @@ async function refresh() {
   el("phase").textContent = state.phase_name;
   el("clock").textContent = fmtClock(state.minutes);
   renderMeters(state.meters);
+  if (!state.started) {
+    if (!footholds) footholds = await api("/api/footholds");
+    if (footholds.length) {
+      renderFootholdChoice(footholds);
+      el("roll-btn").disabled = true;
+      el("start-btn").disabled = !selectedFoothold;
+      return;
+    }
+  }
   renderMap(state.nodes, state.entry_node);
   el("roll-btn").disabled = !armed;
   el("start-btn").disabled = state.started;
@@ -706,7 +748,11 @@ input.addEventListener("keydown", (e) => {
 
 el("roll-btn").onclick = doRoll;
 el("start-btn").onclick = async () => {
-  await api("/api/start", { method: "POST" });
+  await api("/api/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ foothold: selectedFoothold }),
+  });
   print("operation started. one foothold established -- type \"hosts\".", "ok");
   await refresh();
 };

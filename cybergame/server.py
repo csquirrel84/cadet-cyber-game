@@ -45,6 +45,10 @@ def _callsign_for(node_id):
     return f"HOST-{digest[:4].upper()}"
 
 
+class StartRequest(BaseModel):
+    foothold: str | None = None
+
+
 class ScanRequest(BaseModel):
     node: str
     level: int
@@ -100,7 +104,7 @@ def get_state():
         "meters": GAME.meter_status(),
         "collateral_points": GAME.collateral_points,
         "nodes": [_public_node(nid) for nid in sorted(GAME.visible)],
-        "entry_node": SC["entry_node"] if GAME.started else None,
+        "entry_node": GAME.entry_node if GAME.started else None,
         "notes": GAME.notes,
         "title": SC["title"],
     }
@@ -174,13 +178,34 @@ def dm_topology():
         seen.add(key)
         edges.append({"from": a, "to": b, "kind": "effect"})
 
-    return {"nodes": nodes, "edges": edges, "entry_node": SC["entry_node"]}
+    return {"nodes": nodes, "edges": edges, "entry_node": GAME.entry_node or SC["entry_node"]}
+
+
+@app.get("/api/footholds")
+def list_footholds():
+    """Pre-start only, in spirit -- the cover stories the team can pick
+    from. Each one is a different starting node with its own starting
+    noise/trace, the cost of however they got in."""
+    return [
+        {
+            "id": f["id"],
+            "name": f["name"],
+            "text": f["text"],
+            "noise": f.get("noise", 0),
+            "trace": f.get("trace", 0),
+            "note": f.get("note", ""),
+            "node": f["node"],
+            "pos": SC["nodes_by_id"][f["node"]].get("pos"),
+        }
+        for f in SC.get("footholds", [])
+    ]
 
 
 @app.post("/api/start")
-def start_game():
+def start_game(req: StartRequest | None = None):
+    foothold = req.foothold if req else None
     try:
-        GAME.start()
+        GAME.start(foothold)
     except GameError as exc:
         raise HTTPException(400, str(exc))
     return {"ok": True}
