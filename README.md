@@ -2,8 +2,10 @@
 
 A one-hour, browser-based scenario for teaching Army Cadets how infrastructure
 depends on itself, and why real cyber effects have to be precise, quiet and
-unattributable. Everyone plays on one shared screen (a TV or projector works
-well) and uses roles enforced by who is allowed to touch what.
+unattributable. Each team plays on its own laptop, roles enforced by who is
+allowed to touch what. Run it for up to 10 teams at once from one DM laptop
+-- no internet connection needed, and no technical setup beyond running one
+script.
 
 **Printable docs for running a real session:**
 [Game rules](docs/GAME_RULES.md) ·
@@ -11,37 +13,43 @@ well) and uses roles enforced by who is allowed to touch what.
 [Briefing pack](docs/BRIEFING_PACK.md) (briefing, role cards, exploit sheets) ·
 [DM guide](docs/DM_GUIDE.md)
 
-## Quick start
+## Quick start (Linux)
 
-You need Docker. If you don't have it, the setup script will install it for
-you.
-
-**Windows (PowerShell):**
-
-```powershell
-.\setup.ps1
-```
-
-If PowerShell blocks the script the first time, run this once first:
-
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-```
-
-**Linux or macOS:**
+Run this on the laptop you (the DM) will sit at for the session:
 
 ```bash
 ./setup.sh
 ```
 
-Either script checks for Docker, installs it if it's missing, waits for the
-Docker daemon to come up, then builds and starts the game. When it finishes
-it prints the URL — by default:
+It checks for Docker (installs it if missing), builds the game, starts one
+fully isolated instance per team (10 teams, ports 8000-8009), and brings up
+a WiFi access point on this machine for the team laptops to connect to --
+no internet sharing, the team laptops only need to reach this machine. When
+it finishes it prints the WiFi network name/password and every team's URL.
 
-- Main screen (cadets): `http://localhost:8000/`
-- DM console (you): `http://localhost:8000/dm`
+**DM console access is restricted to this machine.** `/dm` (and everything
+under it) only answers requests from this laptop's own loopback interface
+-- it is never reachable over the WiFi network the script creates, by
+design, so there's nothing to password-protect and nothing for a team to
+stumble into. Open each team's console from this laptop at
+`http://127.0.0.1:<team's port>/dm`.
 
-## Running it yourself, without the script
+To shut everything down at the end of the session (stops every team's
+container and tears down the WiFi access point):
+
+```bash
+./teardown.sh
+```
+
+**Windows:** `setup.ps1` currently only starts a single shared-screen
+instance (see below) -- the field deployment above (multiple teams, WiFi
+access point) is Linux-only for now.
+
+## Running a single shared-screen game instead
+
+For a smaller session — one game on a TV or projector, played by everyone
+together rather than team-by-team — skip the scripts above and run the
+container directly:
 
 ```bash
 docker compose up -d --build    # build and start
@@ -49,6 +57,13 @@ docker compose restart          # restart without rebuilding
 docker compose down             # stop it
 docker logs -f cadet-cyber-game # watch it run
 ```
+
+This starts one instance on port 8000:
+
+- Main screen (cadets): `http://localhost:8000/`
+- DM console (you): `http://localhost:8000/dm` (also loopback-only if you're
+  not on the same machine as the cadets, use the host machine's own
+  network address for the main screen and keep `/dm` on the host itself)
 
 If you edit `scenario/blackout.yaml` only, you don't need to rebuild — it's
 mounted read-only into the container, so a `restart` picks it up. If you edit

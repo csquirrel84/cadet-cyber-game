@@ -1,28 +1,32 @@
 # DM guide — Operation Blackout
 
-You run this from `/dm` on whatever device is nearest you, while the
-cadets look at the main screen on the TV or projector. Both pull from the
-same live game, so anything you do shows up on their screen within 2
-seconds.
+**This guide assumes the field deployment** (`./setup.sh`, one team per
+laptop over a WiFi access point, `./teardown.sh` at the end) -- see the
+single shared-screen instructions at the bottom of
+[README.md](../README.md) if you're running one game on a TV or
+projector instead.
 
-If the game is running on the same machine you're both looking at, both
-screens are just `localhost`. If it's running on a separate box (a spare
-laptop plugged into the TV, say), use that machine's address on your
-network instead of `localhost` on every other device — for example
-`http://192.168.1.50:8000/`. Find that address on the host machine with
-`ipconfig` (Windows) or `ip addr` / `ifconfig` (Linux/macOS).
+You run every team's `/dm` from the laptop you ran `setup.sh` on -- that
+is the whole access control. `/dm` only answers requests from that
+machine's own loopback interface, so it is never reachable over the WiFi
+network the team laptops are on, by design: nothing to type, nothing to
+remember, nothing for a cadet to stumble into by guessing a port. Open
+`http://127.0.0.1:<team's port>/dm` in a browser on the DM laptop itself
+for each team you need to check or control -- `setup.sh` prints the full
+list of ports when it finishes.
 
 ## Before the session
 
-1. Confirm the container is up — `docker ps --filter name=cadet-cyber-game`.
-   If it isn't, run the setup script again, or
-   `cd cadet-cyber-game && docker compose up -d`.
-2. Hit `/api/reset` once so you start from a clean game — the DM console
-   has a **Reset game** button for this.
-3. Print [BRIEFING_PACK.md](BRIEFING_PACK.md): the briefing, four role
+1. Run `./setup.sh`. It prints the WiFi network name/password and each
+   team's connect URL — print or copy these onto a card per team laptop
+   before cadets sit down.
+2. Confirm all ten are up — `docker ps --filter name=team-`.
+3. Open each team's `/dm` once and hit **Reset game** so every team
+   starts from a clean state.
+4. Print [BRIEFING_PACK.md](BRIEFING_PACK.md): the briefing, four role
    cards, the exploit sheets (cut apart, kept face-down), and one
    quick-reference card per table.
-4. Decide your roles before the cadets sit down — who's Recce, who's
+5. Decide your roles before the cadets sit down — who's Recce, who's
    Intelligence, who's Operator, who's Commander. For 5–6 cadets, split
    Recce into a pair or add a Signaller.
 
