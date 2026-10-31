@@ -1,9 +1,17 @@
-# Field deployment: one container per team, each its own port, all on the
-# host's own network stack (network_mode: host) so the /dm localhost-only
-# check sees real loopback connections rather than Docker's NAT gateway
-# address. Run via setup-lan.sh, not directly -- that script builds the
-# image once (as cadet-cyber-game-lan:latest, referenced below) and also
-# brings up the WiFi access point the team laptops connect to.
+# Field deployment, Linux: one container per team, each its own port, all
+# on the host's own network stack (network_mode: host). Each team also
+# gets its own admin port (team port + 100) bound inside the container to
+# 127.0.0.1 -- because of host networking that *is* the real host's own
+# loopback, so the OS itself refuses to route anything arriving over the
+# WiFi network to it. /dm only answers on that admin port (see
+# cybergame/server.py's restrict_dm_to_admin_port), not by client IP --
+# client-IP checks turned out to be unsafe on Windows (see
+# docker-compose.lan.windows.yml), so this uses the same port-based
+# mechanism for consistency even though the IP check alone would still
+# have been fine here.
+#
+# Run via setup.sh, not directly -- that script also brings up the WiFi
+# access point the team laptops connect to.
 #
 # Each team's game is a fully separate process with its own memory --
 # nothing a team does is visible to any other team.
@@ -15,6 +23,8 @@ services:
     network_mode: host
     environment:
       - PORT=8000
+      - ADMIN_PORT=8100
+      - ADMIN_BIND_HOST=127.0.0.1
     volumes:
       - ./scenario:/app/scenario:ro
 
@@ -25,6 +35,8 @@ services:
     network_mode: host
     environment:
       - PORT=8001
+      - ADMIN_PORT=8101
+      - ADMIN_BIND_HOST=127.0.0.1
     volumes:
       - ./scenario:/app/scenario:ro
 
@@ -35,6 +47,8 @@ services:
     network_mode: host
     environment:
       - PORT=8002
+      - ADMIN_PORT=8102
+      - ADMIN_BIND_HOST=127.0.0.1
     volumes:
       - ./scenario:/app/scenario:ro
 
@@ -45,6 +59,8 @@ services:
     network_mode: host
     environment:
       - PORT=8003
+      - ADMIN_PORT=8103
+      - ADMIN_BIND_HOST=127.0.0.1
     volumes:
       - ./scenario:/app/scenario:ro
 
@@ -55,6 +71,8 @@ services:
     network_mode: host
     environment:
       - PORT=8004
+      - ADMIN_PORT=8104
+      - ADMIN_BIND_HOST=127.0.0.1
     volumes:
       - ./scenario:/app/scenario:ro
 
@@ -65,6 +83,8 @@ services:
     network_mode: host
     environment:
       - PORT=8005
+      - ADMIN_PORT=8105
+      - ADMIN_BIND_HOST=127.0.0.1
     volumes:
       - ./scenario:/app/scenario:ro
 
@@ -75,6 +95,8 @@ services:
     network_mode: host
     environment:
       - PORT=8006
+      - ADMIN_PORT=8106
+      - ADMIN_BIND_HOST=127.0.0.1
     volumes:
       - ./scenario:/app/scenario:ro
 
@@ -85,6 +107,8 @@ services:
     network_mode: host
     environment:
       - PORT=8007
+      - ADMIN_PORT=8107
+      - ADMIN_BIND_HOST=127.0.0.1
     volumes:
       - ./scenario:/app/scenario:ro
 
@@ -95,6 +119,8 @@ services:
     network_mode: host
     environment:
       - PORT=8008
+      - ADMIN_PORT=8108
+      - ADMIN_BIND_HOST=127.0.0.1
     volumes:
       - ./scenario:/app/scenario:ro
 
@@ -105,5 +131,7 @@ services:
     network_mode: host
     environment:
       - PORT=8009
+      - ADMIN_PORT=8109
+      - ADMIN_BIND_HOST=127.0.0.1
     volumes:
       - ./scenario:/app/scenario:ro

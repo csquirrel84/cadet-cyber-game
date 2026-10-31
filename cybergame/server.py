@@ -1,5 +1,6 @@
 """FastAPI server exposing the engine to the browser screen and DM page."""
 import hashlib
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -29,22 +30,42 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 app = FastAPI(title="Cadet cyber game")
 
 # The DM console can reveal every asset and control the clock -- it must
-# never be reachable by a cadet on the LAN. In the field deployment the
-# DM works from the browser on the host machine itself, so "only answer
-# loopback requests" is the whole access control: no password to lose or
-# share by accident. Covers the /dm route, its API, and the static file
-# directly (StaticFiles would otherwise serve dm.html at /static/dm.html
-# too, bypassing the /dm route entirely).
+# never be reachable by a cadet on the LAN. This used to be enforced by
+# checking the connecting client's IP address against 127.0.0.1 -- that
+# worked on Linux (network_mode: host preserves the real source address)
+# but turned out to be actively unsafe on Windows: Docker Desktop's
+# WSL2 port forwarding NATs *every* connection to a published port,
+# loopback-originated or genuinely remote, through the same internal
+# gateway address, so a cadet's connection and the DM's own would have
+# looked identical to this check.
+#
+# Enforcing it by *which port the connection physically arrived on*
+# instead works the same way on both platforms, because it is Docker's
+# host-level port binding doing the restricting, not anything this app
+# inspects: the admin port is published as 127.0.0.1-only (a real
+# socket-level guarantee, not NAT-dependent), while the public port is
+# open to the LAN. `scope["server"]` is populated by the ASGI server
+# from the actual listening socket a connection was accepted on -- the
+# client cannot influence it, unlike a header or the apparent remote
+# address.
 _DM_PATHS = ("/dm", "/static/dm.html")
-_LOOPBACK_HOSTS = {"127.0.0.1", "::1"}
+
+
+def _admin_port():
+    # Read per-request rather than cached at import time -- keeps this
+    # genuinely configurable by environment (and testable) without
+    # needing a process restart to pick up a changed value.
+    return int(os.environ.get("ADMIN_PORT", "0")) or None
 
 
 @app.middleware("http")
-async def restrict_dm_to_localhost(request: Request, call_next):
+async def restrict_dm_to_admin_port(request: Request, call_next):
     path = request.url.path
     if path in _DM_PATHS or path.startswith("/api/dm/"):
-        client_host = request.client.host if request.client else None
-        if client_host not in _LOOPBACK_HOSTS:
+        server = request.scope.get("server")
+        local_port = server[1] if server else None
+        admin_port = _admin_port()
+        if admin_port is None or local_port != admin_port:
             # 404, not 403 -- don't confirm to a cadet poking at the URL
             # that a DM console exists at all.
             return PlainTextResponse("Not Found", status_code=404)

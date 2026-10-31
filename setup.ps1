@@ -302,7 +302,7 @@ foreach ($team in $Teams) {
 Write-Host "================================================================"
 Write-Host "DM consoles (this machine only, not reachable by the teams):"
 foreach ($team in $Teams) {
-    Write-Host ("  http://127.0.0.1:{0}/dm" -f $team.Port)
+    Write-Host ("  http://127.0.0.1:{0}/dm" -f ($team.Port + 100))
 }
 Write-Host "================================================================"
 Write-Host "To shut everything down: .\teardown.ps1"

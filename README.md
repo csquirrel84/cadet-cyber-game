@@ -27,12 +27,14 @@ a WiFi access point on this machine for the team laptops to connect to --
 no internet sharing, the team laptops only need to reach this machine. When
 it finishes it prints the WiFi network name/password and every team's URL.
 
-**DM console access is restricted to this machine.** `/dm` (and everything
-under it) only answers requests from this laptop's own loopback interface
--- it is never reachable over the WiFi network the script creates, by
-design, so there's nothing to password-protect and nothing for a team to
-stumble into. Open each team's console from this laptop at
-`http://127.0.0.1:<team's port>/dm`.
+**DM console access is restricted to this machine.** Each team's
+`/dm` lives on a *separate* port (the team's port + 100) that is only
+ever bound to this laptop's own loopback interface -- it is never
+reachable over the WiFi network the script creates, by design, so
+there's nothing to password-protect and nothing for a team to stumble
+into. Open each team's console from this laptop at
+`http://127.0.0.1:<team's port + 100>/dm` -- `setup.sh`/`setup.ps1`
+print the exact URLs for all ten when they finish.
 
 To shut everything down at the end of the session (stops every team's
 container and tears down the WiFi access point):
@@ -109,12 +111,14 @@ docker compose down             # stop it
 docker logs -f cadet-cyber-game # watch it run
 ```
 
-This starts one instance on port 8000:
+This starts one instance, player page on port 8000 and DM console on a
+separate admin port, 8100:
 
 - Main screen (cadets): `http://localhost:8000/`
-- DM console (you): `http://localhost:8000/dm` (also loopback-only if you're
-  not on the same machine as the cadets, use the host machine's own
-  network address for the main screen and keep `/dm` on the host itself)
+- DM console (you): `http://localhost:8100/dm` (loopback-only, same as
+  the field deployment above -- if the cadets aren't on the same machine
+  as you, give them the host machine's own network address for port
+  8000, and keep `/dm` on port 8100 to yourself)
 
 If you edit `scenario/blackout.yaml` only, you don't need to rebuild — it's
 mounted read-only into the container, so a `restart` picks it up. If you edit

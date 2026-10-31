@@ -136,7 +136,8 @@ echo "================================================================"
 echo "DM consoles (this machine only, not reachable by the teams):"
 for entry in "${TEAMS[@]}"; do
   port="${entry##*:}"
-  echo "  http://127.0.0.1:${port}/dm"
+  admin_port=$((port + 100))
+  echo "  http://127.0.0.1:${admin_port}/dm"
 done
 echo "================================================================"
 echo "To shut everything down: ./teardown.sh"

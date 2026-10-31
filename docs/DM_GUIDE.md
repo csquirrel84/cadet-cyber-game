@@ -7,13 +7,15 @@ single shared-screen instructions at the bottom of
 projector instead.
 
 You run every team's `/dm` from the laptop you ran `setup.sh` on -- that
-is the whole access control. `/dm` only answers requests from that
-machine's own loopback interface, so it is never reachable over the WiFi
-network the team laptops are on, by design: nothing to type, nothing to
-remember, nothing for a cadet to stumble into by guessing a port. Open
-`http://127.0.0.1:<team's port>/dm` in a browser on the DM laptop itself
-for each team you need to check or control -- `setup.sh` prints the full
-list of ports when it finishes.
+is the whole access control. Each team's `/dm` lives on its own separate
+port (the team's port + 100), bound only to that laptop's own loopback
+interface, so it is never reachable over the WiFi network the team
+laptops are on, by design: nothing to type, nothing to remember, nothing
+for a cadet to stumble into by guessing a port -- their player page and
+your DM console for the same team aren't even the same port. Open
+`http://127.0.0.1:<team's port + 100>/dm` in a browser on the DM laptop
+itself for each team you need to check or control -- `setup.sh` prints
+the full list when it finishes.
 
 ## Before the session
 
