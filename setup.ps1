@@ -1,8 +1,12 @@
-# One script: checks for Docker (installs it if missing), builds the
-# game, starts one isolated instance per team (ports 8000-8009), and
-# attempts to bring up a WiFi access point on this machine for the team
-# laptops to connect to. No internet is shared -- cadets only need to
-# reach this machine.
+# One script: checks for WSL and Docker (installs either if missing),
+# builds the game, starts one isolated instance per team (ports
+# 8000-8009), and attempts to bring up a WiFi access point on this
+# machine for the team laptops to connect to. No internet is shared --
+# cadets only need to reach this machine.
+#
+# If WSL needs installing, this exits after kicking it off -- it needs a
+# reboot before Docker Desktop can be installed or started. Re-run the
+# script after rebooting.
 #
 # The WiFi access point step is best-effort: Windows has no first-class
 # scriptable "create a hotspot" command (the Settings app's Mobile
@@ -22,6 +26,38 @@
 
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
+
+# ------------------------------------------------------------------- WSL
+
+function Test-WSL {
+    if (-not (Get-Command wsl -ErrorAction SilentlyContinue)) { return $false }
+    try {
+        wsl --status *> $null
+        return $LASTEXITCODE -eq 0
+    } catch {
+        return $false
+    }
+}
+
+if (-not (Test-WSL)) {
+    Write-Host "WSL (Windows Subsystem for Linux) not found -- Docker Desktop needs it."
+    Write-Host "Installing WSL. This needs admin rights and a reboot before it finishes."
+    wsl --install
+    Write-Host ""
+    Write-Host "WSL is installing. Reboot this machine, then re-run this script."
+    exit 1
+}
+
+# Make sure WSL2 (not the older WSL1) is the default -- Docker Desktop
+# needs WSL2 specifically. Harmless to run even if it is already WSL2.
+try {
+    wsl --set-default-version 2 *> $null
+} catch {
+    Write-Host "Could not confirm WSL2 is the default version: $($_.Exception.Message)"
+    Write-Host "If Docker Desktop fails to start later, check Settings > Apps > Optional features,"
+    Write-Host "or run 'wsl --set-default-version 2' yourself."
+}
+Write-Host "WSL is up."
 
 $SSID = "OPERATION-BLACKOUT"
 $WifiPassword = "blackout2026"
