@@ -227,6 +227,13 @@ function Start-ModernHotspotAp {
     Add-Type -AssemblyName System.Runtime.WindowsRuntime
     [void][Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager, Windows.Networking.NetworkOperators, ContentType = WindowsRuntime]
     [void][Windows.Networking.Connectivity.NetworkInformation, Windows.Networking.Connectivity, ContentType = WindowsRuntime]
+    # Forces PowerShell to generate the strongly-typed wrapper for this
+    # specific closed generic ahead of time -- without this, calls that
+    # return IAsyncOperation<NetworkOperatorTetheringOperationResult>
+    # come back as a bare System.__ComObject that AsTask then can't cast,
+    # a known gotcha calling this particular WinRT API from plain
+    # PowerShell rather than a packaged app.
+    [void][Windows.Foundation.IAsyncOperation``1[Windows.Networking.NetworkOperators.NetworkOperatorTetheringOperationResult]]
 
     $profile = [Windows.Networking.Connectivity.NetworkInformation]::GetInternetConnectionProfile()
     if (-not $profile) {
