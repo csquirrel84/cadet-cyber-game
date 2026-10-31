@@ -1,13 +1,28 @@
 #!/usr/bin/env bash
-# Checks for Docker, installs it if missing (Linux via the official
-# convenience script, macOS via Homebrew if available), makes sure the
-# daemon is running, then builds and starts the game.
+# One script: checks for Docker (installs it if missing), builds the
+# game, starts one isolated instance per team (ports 8000-8009), and
+# brings up a WiFi access point on this machine for the team laptops to
+# connect to. No internet is shared -- cadets only need to reach this
+# machine.
+#
+# Run this on the machine the DM will actually sit at. The DM console
+# (/dm) only answers requests from this machine's own loopback
+# interface, so it is never reachable over the WiFi network this script
+# creates -- nothing to configure for that, it's just how the server
+# listens.
+#
+# To undo everything this does, run ./teardown.sh
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
 os="$(uname -s)"
+SSID="OPERATION-BLACKOUT"
+WIFI_PASSWORD="blackout2026"
+IMAGE="cadet-cyber-game-lan:latest"
+TEAMS=(alpha:8000 bravo:8001 charlie:8002 delta:8003 echo:8004 foxtrot:8005 golf:8006 hotel:8007 india:8008 juliett:8009)
 
 have_docker() { command -v docker >/dev/null 2>&1; }
+have_nmcli() { command -v nmcli >/dev/null 2>&1; }
 
 install_docker_linux() {
   echo "Docker not found. Installing via Docker's official convenience script..."
@@ -73,11 +88,55 @@ if ! docker compose version >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Building and starting the game..."
-docker compose up -d --build
+ap_ip=""
+if [ "$os" = "Linux" ] && have_nmcli; then
+  wifi_if="${1:-}"
+  if [ -z "$wifi_if" ]; then
+    wifi_if="$(nmcli -t -f TYPE,DEVICE device | awk -F: '$1=="wifi"{print $2; exit}')"
+  fi
+  if [ -n "$wifi_if" ]; then
+    echo "Using WiFi interface: $wifi_if"
+    echo "Starting the access point ($SSID)..."
+    nmcli device wifi hotspot ifname "$wifi_if" ssid "$SSID" password "$WIFI_PASSWORD"
+    ap_ip="$(nmcli -g IP4.ADDRESS device show "$wifi_if" | cut -d/ -f1)"
+    ap_ip="${ap_ip:-10.42.0.1}"
+  else
+    echo "No WiFi device found -- skipping the access point."
+    echo "Team laptops will need another way to reach this machine (e.g. plugged into the same LAN)."
+  fi
+else
+  echo "WiFi access point setup isn't automated on this OS yet."
+  echo "Team laptops will need another way to reach this machine (e.g. plugged into the same LAN)."
+fi
 
-port="$(grep -oE '"[0-9]+:8000"' docker-compose.yml | head -1 | tr -d '"' | cut -d: -f1)"
-port="${port:-8000}"
+echo "Building the game image..."
+docker build -t "$IMAGE" .
+
+echo "Starting one game per team..."
+docker compose -f docker-compose.lan.yml up -d
+
 echo ""
-echo "Running. Open http://localhost:${port}/ in a browser."
-echo "DM console: http://localhost:${port}/dm"
+echo "================================================================"
+if [ -n "$ap_ip" ]; then
+  echo "WiFi network:  $SSID"
+  echo "Password:      $WIFI_PASSWORD"
+  echo "================================================================"
+fi
+echo "Team     Connect to"
+for entry in "${TEAMS[@]}"; do
+  name="${entry%%:*}"
+  port="${entry##*:}"
+  if [ -n "$ap_ip" ]; then
+    printf "%-10s http://%s:%s/\n" "$name" "$ap_ip" "$port"
+  else
+    printf "%-10s http://<this-machine's-LAN-IP>:%s/\n" "$name" "$port"
+  fi
+done
+echo "================================================================"
+echo "DM consoles (this machine only, not reachable by the teams):"
+for entry in "${TEAMS[@]}"; do
+  port="${entry##*:}"
+  echo "  http://127.0.0.1:${port}/dm"
+done
+echo "================================================================"
+echo "To shut everything down: ./teardown.sh"
