@@ -9,15 +9,18 @@
 # script after rebooting.
 #
 # The WiFi access point step is best-effort: Windows has no first-class
-# scriptable "create a hotspot" command. This script tries two
-# mechanisms in order -- the older netsh hosted network, then (if that
-# fails) the same Mobile Hotspot API the Settings app toggle uses -- and
-# if both fail, prints the exact manual steps to turn on Mobile Hotspot
-# by hand instead. The game itself and the per-team deployment work
-# fine either way; this only affects how team laptops connect. See
-# README.md for the one-off Microsoft Loopback Adapter prep step the
-# second mechanism needs on a machine with no internet connection at
-# all.
+# scriptable "create a hotspot" command, and the only two mechanisms
+# that exist from a plain script don't reliably work. The older netsh
+# hosted network depends on WiFi adapter driver support that many
+# current adapters simply dropped. The newer Mobile Hotspot API
+# (NetworkOperatorTetheringManager -- what the Settings app toggle
+# calls) was tried too, but confirmed broken when called from a plain
+# PowerShell console rather than a packaged app (it hands back
+# WinRT async results PowerShell can't cast), on more than one attempt
+# at working around it -- not shipping that path. If the hosted network
+# attempt fails, this prints the exact manual steps to turn on Mobile
+# Hotspot by hand instead. The game itself and the per-team deployment
+# work fine either way; this only affects how team laptops connect.
 #
 # Run from PowerShell: .\setup.ps1
 # If scripts are blocked on this machine, run once first:
@@ -201,89 +204,14 @@ function Start-HostedNetworkAp {
     return "192.168.137.1"
 }
 
-function Await-WinRtOperation($Operation, [type]$ResultType) {
-    # PowerShell can call WinRT async methods directly, but can't natively
-    # await the IAsyncOperation they return -- this converts it to a .NET
-    # Task the normal way (the same trick most "control Mobile Hotspot
-    # from PowerShell" scripts use) and blocks on that instead.
-    $asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
-        $_.Name -eq "AsTask" -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq "IAsyncOperation``1"
-    })[0].MakeGenericMethod($ResultType)
-    $task = $asTaskGeneric.Invoke($null, @($Operation))
-    $task.Wait(-1) | Out-Null
-    return $task.Result
-}
-
-function Start-ModernHotspotAp {
-    # The mechanism behind the Settings app's Mobile Hotspot toggle. More
-    # likely to work on current hardware than the legacy path above, but
-    # it needs an existing *connection profile* to associate the hotspot
-    # with -- normally whatever's providing internet. With no internet
-    # connection at all, there is nothing for it to find unless the
-    # Microsoft Loopback Adapter has been installed beforehand (a one-off,
-    # no-download, built-into-Windows prep step -- see README) to stand in
-    # as that connection. It does not need to actually be plugged into
-    # anything, it just needs to exist and be enabled.
-    Add-Type -AssemblyName System.Runtime.WindowsRuntime
-    [void][Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager, Windows.Networking.NetworkOperators, ContentType = WindowsRuntime]
-    [void][Windows.Networking.Connectivity.NetworkInformation, Windows.Networking.Connectivity, ContentType = WindowsRuntime]
-    # Forces PowerShell to generate the strongly-typed wrapper for this
-    # specific closed generic ahead of time -- without this, calls that
-    # return IAsyncOperation<NetworkOperatorTetheringOperationResult>
-    # come back as a bare System.__ComObject that AsTask then can't cast,
-    # a known gotcha calling this particular WinRT API from plain
-    # PowerShell rather than a packaged app.
-    [void][Windows.Foundation.IAsyncOperation``1[Windows.Networking.NetworkOperators.NetworkOperatorTetheringOperationResult]]
-
-    $profile = [Windows.Networking.Connectivity.NetworkInformation]::GetInternetConnectionProfile()
-    if (-not $profile) {
-        # Fall back to any connection profile at all (not filtered to
-        # "has internet") -- this is what lets the Loopback Adapter work
-        # as a stand-in with no internet anywhere on the machine.
-        $loopback = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object {
-            $_.InterfaceDescription -like "*Loopback*" -and $_.Status -eq "Up"
-        } | Select-Object -First 1
-        if (-not $loopback) {
-            throw "No internet connection and no Microsoft Loopback Adapter found to tether from. See README for the one-off prep step to add one."
-        }
-        $profile = [Windows.Networking.Connectivity.NetworkInformation]::GetConnectionProfiles() | Where-Object {
-            $_.NetworkAdapter -and $_.NetworkAdapter.NetworkAdapterId -eq $loopback.InterfaceGuid
-        } | Select-Object -First 1
-        if (-not $profile) {
-            throw "Found the Loopback Adapter, but Windows has no connection profile for it yet -- give it an IP address (even a made-up one) in adapter settings, then retry."
-        }
-    }
-
-    $tetheringManager = [Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager]::CreateFromConnectionProfile($profile)
-    $config = $tetheringManager.GetCurrentAccessPointConfiguration()
-    $config.Ssid = $SSID
-    $config.Passphrase = $WifiPassword
-    Await-WinRtOperation $tetheringManager.ConfigureAccessPointAsync($config) ([Windows.Networking.NetworkOperators.NetworkOperatorTetheringOperationResult]) | Out-Null
-
-    if ($tetheringManager.TetheringOperationalState -ne [Windows.Networking.NetworkOperators.TetheringOperationalState]::On) {
-        $result = Await-WinRtOperation $tetheringManager.StartTetheringAsync() ([Windows.Networking.NetworkOperators.NetworkOperatorTetheringOperationResult])
-        if ($result.Status -ne [Windows.Networking.NetworkOperators.TetheringOperationStatus]::Success) {
-            throw "StartTetheringAsync reported: $($result.Status)"
-        }
-    }
-    return "192.168.137.1"
-}
-
 $apIp = $null
 try {
     Write-Host "Starting the access point ($SSID)..."
     $apIp = Start-HostedNetworkAp
-    Write-Host "Access point is up (legacy hosted network)."
+    Write-Host "Access point is up."
 } catch {
     Write-Host "Hosted network approach failed: $($_.Exception.Message)"
-    Write-Host "Trying the modern Mobile Hotspot API instead..."
-    try {
-        $apIp = Start-ModernHotspotAp
-        Write-Host "Access point is up (Mobile Hotspot API)."
-    } catch {
-        Write-Host "Mobile Hotspot API also failed: $($_.Exception.Message)"
-        Show-ManualHotspotFallback
-    }
+    Show-ManualHotspotFallback
 }
 
 # ------------------------------------------------------------------- build + run
