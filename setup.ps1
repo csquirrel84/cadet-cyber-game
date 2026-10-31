@@ -9,14 +9,15 @@
 # script after rebooting.
 #
 # The WiFi access point step is best-effort: Windows has no first-class
-# scriptable "create a hotspot" command (the Settings app's Mobile
-# Hotspot toggle is the only officially supported route, and it has no
-# command-line equivalent). This script tries the older netsh hosted
-# network + Internet Connection Sharing mechanism, which is scriptable
-# but depends on your WiFi adapter's driver and your Windows version. If
-# it fails, it prints the exact manual steps to turn on Mobile Hotspot
-# by hand instead -- the game itself and the per-team deployment still
-# work fine either way, this only affects how team laptops connect.
+# scriptable "create a hotspot" command. This script tries two
+# mechanisms in order -- the older netsh hosted network, then (if that
+# fails) the same Mobile Hotspot API the Settings app toggle uses -- and
+# if both fail, prints the exact manual steps to turn on Mobile Hotspot
+# by hand instead. The game itself and the per-team deployment work
+# fine either way; this only affects how team laptops connect. See
+# README.md for the one-off Microsoft Loopback Adapter prep step the
+# second mechanism needs on a machine with no internet connection at
+# all.
 #
 # Run from PowerShell: .\setup.ps1
 # If scripts are blocked on this machine, run once first:
@@ -158,53 +159,124 @@ function Show-ManualHotspotFallback {
     Write-Host ""
 }
 
-$apIp = $null
-try {
+function Start-HostedNetworkAp {
+    # The old mechanism. Works on some WiFi adapters, but many modern
+    # WiFi 6/6E adapters dropped driver support for it entirely in
+    # favour of the newer Mobile Hotspot API below.
     $driverInfo = netsh wlan show drivers
     if ($driverInfo -notmatch "Hosted network supported\s*:\s*Yes") {
-        Write-Host "This machine's WiFi adapter doesn't support a hosted network."
-        Show-ManualHotspotFallback
-    } else {
-        Write-Host "Starting the access point ($SSID)..."
-        netsh wlan set hostednetwork mode=allow ssid=$SSID key=$WifiPassword keyUsage=persistent | Out-Null
-        $startResult = netsh wlan start hostednetwork
-        if ($startResult -notmatch "started") {
-            throw "netsh wlan start hostednetwork did not report success: $startResult"
-        }
-        Start-Sleep -Seconds 2
-
-        # netsh has no switch to actually hand out IP addresses to clients --
-        # that needs Internet Connection Sharing enabled on the hosted
-        # network's virtual adapter, which has no CLI either. This drives
-        # the same legacy COM API the old Network Connections GUI used.
-        # "Public" side just needs to be *some* LAN-type adapter for ICS to
-        # accept the configuration -- it does not need to actually be
-        # connected to the internet, since nothing is being shared to it.
-        $hnetShare = New-Object -ComObject HNetCfg.HNetShare
-        $hostedConn = $null
-        $publicConn = $null
-        foreach ($conn in $hnetShare.EnumEveryConnection) {
-            $props = $hnetShare.NetConnectionProps.Invoke($conn)
-            if ($props.DeviceName -like "*Hosted Network*" -or $props.DeviceName -like "*Virtual Wi-Fi*" -or $props.Name -like "*Hosted Network*") {
-                $hostedConn = $conn
-            } elseif (-not $publicConn -and $props.MediaType -eq 0) {
-                $publicConn = $conn
-            }
-        }
-
-        if (-not $hostedConn -or -not $publicConn) {
-            throw "Could not identify the hosted network's virtual adapter for sharing."
-        }
-
-        $hnetShare.INetSharingConfigurationForINetConnection.Invoke($publicConn).EnableSharing(0)  # 0 = ICS_PUBLIC
-        $hnetShare.INetSharingConfigurationForINetConnection.Invoke($hostedConn).EnableSharing(1)   # 1 = ICS_PRIVATE
-        Start-Sleep -Seconds 3
-        $apIp = "192.168.137.1"
-        Write-Host "Access point is up."
+        throw "This WiFi adapter doesn't support the hosted network mechanism."
     }
+    netsh wlan set hostednetwork mode=allow ssid=$SSID key=$WifiPassword keyUsage=persistent | Out-Null
+    $startResult = netsh wlan start hostednetwork
+    if ($startResult -notmatch "started") {
+        throw "netsh wlan start hostednetwork did not report success: $startResult"
+    }
+    Start-Sleep -Seconds 2
+
+    # netsh has no switch to actually hand out IP addresses to clients --
+    # that needs Internet Connection Sharing enabled on the hosted
+    # network's virtual adapter, which has no CLI either. This drives the
+    # same legacy COM API the old Network Connections GUI used. "Public"
+    # side just needs to be *some* LAN-type adapter for ICS to accept the
+    # configuration -- it does not need to actually be connected to the
+    # internet, since nothing is being shared to it.
+    $hnetShare = New-Object -ComObject HNetCfg.HNetShare
+    $hostedConn = $null
+    $publicConn = $null
+    foreach ($conn in $hnetShare.EnumEveryConnection) {
+        $props = $hnetShare.NetConnectionProps.Invoke($conn)
+        if ($props.DeviceName -like "*Hosted Network*" -or $props.DeviceName -like "*Virtual Wi-Fi*" -or $props.Name -like "*Hosted Network*") {
+            $hostedConn = $conn
+        } elseif (-not $publicConn -and $props.MediaType -eq 0) {
+            $publicConn = $conn
+        }
+    }
+    if (-not $hostedConn -or -not $publicConn) {
+        throw "Could not identify the hosted network's virtual adapter for sharing."
+    }
+    $hnetShare.INetSharingConfigurationForINetConnection.Invoke($publicConn).EnableSharing(0)  # 0 = ICS_PUBLIC
+    $hnetShare.INetSharingConfigurationForINetConnection.Invoke($hostedConn).EnableSharing(1)   # 1 = ICS_PRIVATE
+    Start-Sleep -Seconds 3
+    return "192.168.137.1"
+}
+
+function Await-WinRtOperation($Operation, [type]$ResultType) {
+    # PowerShell can call WinRT async methods directly, but can't natively
+    # await the IAsyncOperation they return -- this converts it to a .NET
+    # Task the normal way (the same trick most "control Mobile Hotspot
+    # from PowerShell" scripts use) and blocks on that instead.
+    $asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
+        $_.Name -eq "AsTask" -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq "IAsyncOperation``1"
+    })[0].MakeGenericMethod($ResultType)
+    $task = $asTaskGeneric.Invoke($null, @($Operation))
+    $task.Wait(-1) | Out-Null
+    return $task.Result
+}
+
+function Start-ModernHotspotAp {
+    # The mechanism behind the Settings app's Mobile Hotspot toggle. More
+    # likely to work on current hardware than the legacy path above, but
+    # it needs an existing *connection profile* to associate the hotspot
+    # with -- normally whatever's providing internet. With no internet
+    # connection at all, there is nothing for it to find unless the
+    # Microsoft Loopback Adapter has been installed beforehand (a one-off,
+    # no-download, built-into-Windows prep step -- see README) to stand in
+    # as that connection. It does not need to actually be plugged into
+    # anything, it just needs to exist and be enabled.
+    Add-Type -AssemblyName System.Runtime.WindowsRuntime
+    [void][Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager, Windows.Networking.NetworkOperators, ContentType = WindowsRuntime]
+    [void][Windows.Networking.Connectivity.NetworkInformation, Windows.Networking.Connectivity, ContentType = WindowsRuntime]
+
+    $profile = [Windows.Networking.Connectivity.NetworkInformation]::GetInternetConnectionProfile()
+    if (-not $profile) {
+        # Fall back to any connection profile at all (not filtered to
+        # "has internet") -- this is what lets the Loopback Adapter work
+        # as a stand-in with no internet anywhere on the machine.
+        $loopback = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object {
+            $_.InterfaceDescription -like "*Loopback*" -and $_.Status -eq "Up"
+        } | Select-Object -First 1
+        if (-not $loopback) {
+            throw "No internet connection and no Microsoft Loopback Adapter found to tether from. See README for the one-off prep step to add one."
+        }
+        $profile = [Windows.Networking.Connectivity.NetworkInformation]::GetConnectionProfiles() | Where-Object {
+            $_.NetworkAdapter -and $_.NetworkAdapter.NetworkAdapterId -eq $loopback.InterfaceGuid
+        } | Select-Object -First 1
+        if (-not $profile) {
+            throw "Found the Loopback Adapter, but Windows has no connection profile for it yet -- give it an IP address (even a made-up one) in adapter settings, then retry."
+        }
+    }
+
+    $tetheringManager = [Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager]::CreateFromConnectionProfile($profile)
+    $config = $tetheringManager.GetCurrentAccessPointConfiguration()
+    $config.Ssid = $SSID
+    $config.Passphrase = $WifiPassword
+    Await-WinRtOperation $tetheringManager.ConfigureAccessPointAsync($config) ([Windows.Networking.NetworkOperators.NetworkOperatorTetheringOperationResult]) | Out-Null
+
+    if ($tetheringManager.TetheringOperationalState -ne [Windows.Networking.NetworkOperators.TetheringOperationalState]::On) {
+        $result = Await-WinRtOperation $tetheringManager.StartTetheringAsync() ([Windows.Networking.NetworkOperators.NetworkOperatorTetheringOperationResult])
+        if ($result.Status -ne [Windows.Networking.NetworkOperators.TetheringOperationStatus]::Success) {
+            throw "StartTetheringAsync reported: $($result.Status)"
+        }
+    }
+    return "192.168.137.1"
+}
+
+$apIp = $null
+try {
+    Write-Host "Starting the access point ($SSID)..."
+    $apIp = Start-HostedNetworkAp
+    Write-Host "Access point is up (legacy hosted network)."
 } catch {
-    Write-Host "Automatic WiFi access point setup failed: $($_.Exception.Message)"
-    Show-ManualHotspotFallback
+    Write-Host "Hosted network approach failed: $($_.Exception.Message)"
+    Write-Host "Trying the modern Mobile Hotspot API instead..."
+    try {
+        $apIp = Start-ModernHotspotAp
+        Write-Host "Access point is up (Mobile Hotspot API)."
+    } catch {
+        Write-Host "Mobile Hotspot API also failed: $($_.Exception.Message)"
+        Show-ManualHotspotFallback
+    }
 }
 
 # ------------------------------------------------------------------- build + run

@@ -53,20 +53,48 @@ If PowerShell blocks the script the first time, run this once first:
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
 
-Does the same as `setup.sh`: Docker install check, build, 10 isolated team
-instances, and an attempt at a WiFi access point. **The WiFi step is
+Does the same as `setup.sh`: WSL/Docker install check, build, 10 isolated
+team instances, and an attempt at a WiFi access point. **The WiFi step is
 best-effort on Windows** -- there's no officially supported command-line
-way to create one, so the script drives the older netsh hosted-network
-mechanism, which depends on your WiFi adapter and Windows version. If it
-fails, it prints the exact manual steps to turn on Mobile Hotspot by hand
-instead; the game and the 10 team instances work the same either way, only
-how team laptops connect changes.
+way to create one. The script tries two mechanisms in order:
 
-**This Windows path has not been run end to end yet** -- test it on the
-actual machine you'll deploy on well before a real session, not on the day.
+1. The older netsh hosted-network mechanism -- works on some WiFi
+   adapters, but many current WiFi 6/6E adapters dropped driver support
+   for it.
+2. The same Mobile Hotspot API the Settings app toggle uses -- more
+   likely to work on current hardware, but it needs an existing network
+   connection to associate the hotspot with. With no internet connection
+   anywhere on the machine (the real deployment scenario), there is
+   nothing for it to use *unless* the Microsoft Loopback Adapter has been
+   installed first (see below) to stand in for one.
+
+If both fail, it prints the exact manual steps to turn on Mobile Hotspot
+by hand instead; the game and the 10 team instances work the same either
+way, only how team laptops connect changes.
+
+### One-off prep: Microsoft Loopback Adapter
+
+Only needed if the machine has no internet connection at all and the
+legacy hosted-network mechanism doesn't work on its WiFi adapter (step 2
+above needs this to find anything to tether from). Do this once, with
+admin rights, before game day -- it's a standard Windows feature, no
+download required:
+
+1. Open Device Manager.
+2. **Action > Add legacy hardware** (or Action menu depending on Windows
+   version).
+3. **Install the hardware that I manually select from a list**.
+4. **Network adapters**.
+5. Manufacturer: **Microsoft**. Model: **Microsoft KM-TEST Loopback
+   Adapter** (older Windows) or **Microsoft Loopback Adapter** (newer).
+6. Finish. The script will find and use it automatically next run.
+
+**This Windows path -- the hotspot automation in particular -- has not
+been run end to end yet.** Test it on the actual machine you'll deploy on
+well before a real session, not on the day.
 
 `.\teardown.ps1` reverses it: stops every team's container and (if it was
-brought up automatically) the access point.
+brought up automatically, by either mechanism) the access point.
 
 ## Running a single shared-screen game instead
 
