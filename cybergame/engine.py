@@ -164,6 +164,9 @@ class Game:
         return False
 
     def _check_rule(self, node_id, rule):
+        if rule.startswith("all:"):
+            parts = rule[4:].split("&")
+            return all(self._check_rule(node_id, p) for p in parts)
         if rule == "down":
             return not self.is_up(node_id)
         if rule.startswith("flag:"):
@@ -332,6 +335,8 @@ class Game:
                 self.counters[target][eff["name"]] = self.counters[target].get(eff["name"], 0) + delta
             elif kind == "noise":
                 self._apply_meter("noise", eff.get("delta", 0))
+            elif kind == "trace":
+                self._apply_meter("trace", eff.get("delta", 0))
             elif kind == "pin":
                 self.pinned.add(target)
             elif kind == "hint":

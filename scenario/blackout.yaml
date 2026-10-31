@@ -90,11 +90,33 @@ flag_text:
   cut_off: "the site is cut off from command"
 
 extra_edges:
-  - {from: fuel_depot, to: gen_ad, kind: fuel}
-  - {from: gen_ad, to: airdef, kind: backup}
-  - {from: mil_comms, to: airdef, kind: command}
-  - {from: mil_comms, to: bunker, kind: command}
-  - {from: telecoms, to: airdef, kind: command}
+  # -- network: real pivot paths, grouped into separate networks that do
+  #    not otherwise talk to each other --
+  - {from: sub3, to: telecoms, kind: network, desc: "shares the utility's SCADA backhaul circuit"}
+  - {from: telecoms, to: homes_east, kind: network}
+  - {from: telecoms, to: homes_west, kind: network}
+  - {from: telecoms, to: civil_radar, kind: network}
+  - {from: telecoms, to: hospital, kind: network}
+  - {from: telecoms, to: water_plant, kind: network}
+  - {from: telecoms, to: rail, kind: network}
+  - {from: telecoms, to: fuel_depot, kind: network}
+  - {from: mil_comms, to: airdef, kind: network}
+  - {from: mil_comms, to: bunker, kind: network}
+  - {from: mil_comms, to: air_base, kind: network}
+  - {from: mil_comms, to: mil_radar, kind: network}
+  - {from: civil_radar, to: air_base, kind: network, desc: "shared air-traffic coordination feed"}
+  - {from: mil_radar, to: air_base, kind: network}
+  - {from: homes_west, to: mil_comms, kind: network, desc: "bunker staff's home networks -- a weak route in"}
+  # -- bridge: the few deliberate crossings between networks --
+  - {from: telecoms, to: mil_comms, kind: bridge, desc: "leased circuit bridging civil and military networks"}
+  - {from: fuel_depot, to: air_base, kind: bridge, desc: "logistics supply system"}
+  - {from: contractor, to: air_base, kind: bridge, desc: "maintenance contractor's remote access, forgotten about"}
+  # -- effect: a dependency with no pivot path -- cutting it causes an
+  #    outage, but you cannot get from one end to the other --
+  - {from: fuel_depot, to: gen_ad, kind: effect, desc: "diesel supply"}
+  - {from: gen_ad, to: airdef, kind: effect, desc: "backup power"}
+  - {from: fuel_depot, to: bunker, kind: effect, desc: "backup generator fuel"}
+  - {from: rail, to: bunker, kind: effect, desc: "missile reload convoy"}
 
 debrief_links:
   - "Stuxnet (about 2010): a precise effect on one objective, quiet for a long time, never officially attributed."
@@ -113,7 +135,7 @@ nodes:
     desc: "Feeds the hospital, east homes, rail and air defence"
     pos: [12, 27]
     service: grid_plc
-    needs: [{kind: power, sources: [ps_north]}]
+    needs: [{kind: power, sources: [ps_north], network: true}]
     cards: [open_breaker, lock_breaker]
   - id: sub2
     name: "Substation 2"
@@ -121,7 +143,7 @@ nodes:
     desc: "Feeds water, fuel, military radar and the air base"
     pos: [46, 27]
     service: grid_plc
-    needs: [{kind: power, sources: [ps_north, ps_south]}]
+    needs: [{kind: power, sources: [ps_north, ps_south], network: true}]
     cards: [open_breaker, lock_breaker]
   - id: sub3
     name: "Substation 3"
@@ -129,7 +151,7 @@ nodes:
     desc: "Feeds west homes, civil radar, telecoms and military comms"
     pos: [82, 27]
     service: grid_plc
-    needs: [{kind: power, sources: [ps_south]}]
+    needs: [{kind: power, sources: [ps_south], network: true}]
     cards: [open_breaker, lock_breaker]
 
   - id: hospital
@@ -154,7 +176,7 @@ nodes:
     protected: true
     penalty: 10
     needs: [{kind: power, sources: [sub1]}]
-    cards: [open_district]
+    cards: [open_district, staged_diversion]
   - id: rail
     name: "Rail signalling"
     type: rail
@@ -163,7 +185,7 @@ nodes:
     service: rail_ctl
     needs: [{kind: power, sources: [sub1]}]
     down_flags: [signals_red]
-    cards: [set_red, set_clear]
+    cards: [set_red, set_clear, halt_reload_convoy]
   - id: water_plant
     name: "Water treatment plant"
     type: water
@@ -190,7 +212,7 @@ nodes:
     service: radar_sw3
     needs: [{kind: power, sources: [sub2]}]
     notes: {2: "Runs the same track-processing software as the civil radar."}
-    cards: [shared_radar_exploit, blank_tracks, ghost_tracks, delay_feed, corrupt_iff, freeze_display]
+    cards: [shared_radar_exploit, blank_tracks, ghost_tracks, delay_feed, corrupt_iff, freeze_display, feed_false_targets]
   - id: air_base
     name: "Air base"
     type: air base
@@ -272,7 +294,7 @@ nodes:
     service: telecom_sw
     needs: [{kind: power, sources: [sub3], grace_minutes: 8}]
     notes: {3: "Battery lasts about 8 minutes."}
-    cards: [jam_command_link]
+    cards: [jam_command_link, spoof_time_signal]
   - id: mil_comms
     name: "Military comms"
     type: comms
@@ -280,7 +302,7 @@ nodes:
     pos: [91, 72]
     service: order_format
     needs: [{kind: power, sources: [sub3]}]
-    cards: [jam_link, inject_order, intercept]
+    cards: [jam_link, inject_order, intercept, corrupt_auth_codes]
   - id: homes_west
     name: "West homes and businesses"
     type: district
@@ -291,14 +313,49 @@ nodes:
     needs: [{kind: power, sources: [sub3]}]
     cards: [open_district]
 
+  - id: contractor
+    name: "Maintenance contractor"
+    type: contractor
+    desc: "Hidden until found. A remote-access route the defenders forgot about."
+    pos: [70, 60]
+    hidden: true
+    discoverable_from: air_base
+    cards: []
+  - id: bunker_bms
+    name: "Bunker building management system"
+    type: bms
+    desc: "Hidden until found. Controls the fire and chemical alarms."
+    pos: [22, 85]
+    hidden: true
+    discoverable_from: bunker
+    service: bms
+    cards: [trigger_false_alarm]
+
   - id: bunker
     name: "Hostile command bunker"
     type: objective
     desc: "The launch site. This is the real objective."
     pos: [30, 92]
     service: launch_term
-    neutralised_when: ["flag:locked", "flag:cut_off"]
-    cards: [lock_launch, cut_off_bunker]
+    needs:
+      - {kind: power, sources: [sub2]}
+      - {kind: water, sources: [water_plant], grace_minutes: 10}
+    counters: {reloads: 1}
+    notes: {3: "Has its own backup generator, fed from the fuel depot."}
+    neutralised_when:
+      - "flag:locked"
+      - "flag:cut_off"
+      - "flag:stood_down_bunker"
+      - "all:node:mil_comms:down&node:mil_radar:down"
+      - "all:node:mil_comms:down&node:civil_radar:down"
+      - "all:node:mil_comms:down&counter:radar_wasted>=1"
+      - "all:node:sub2:down&flag:generator_down"
+      - "down"
+      - "flag:clock_drift"
+      - "flag:no_auth"
+      - "flag:sealed"
+      - "all:counter:reloads<=0&flag:no_auth"
+    cards: [lock_launch, cut_off_bunker, inject_bunker_order, sabotage_bunker_generator]
 
 cards:
   trip_station:
@@ -708,3 +765,91 @@ cards:
     text: "The site cannot receive orders."
     tradeoff: "Defenders may send a runner. Lasts about 8 minutes, so time it for the strike."
     effects: [{type: flag, node: self, name: cut_off, duration: 8}]
+
+  inject_bunker_order:
+    name: "Inject a false stand-down order"
+    kind: software
+    recon: 3
+    noise: 3
+    trace: 2
+    time: 4
+    needs_intel: true
+    text: "The bunker crew believe the launch is cancelled."
+    tradeoff: "Falls apart if the trace meter is already high when it lands."
+    effects: [{type: flag, node: self, name: stood_down_bunker, duration: 12}]
+  sabotage_bunker_generator:
+    name: "Sabotage the backup generator"
+    kind: physical
+    recon: 2
+    noise: 3
+    time: 4
+    collateral: 10
+    text: "The bunker's backup power will not start."
+    tradeoff: "Only matters once the grid supply is also cut. Slow route, some collateral risk."
+    effects: [{type: flag, node: self, name: generator_down}]
+
+  spoof_time_signal:
+    name: "Spoof the time signal"
+    kind: software
+    recon: 2
+    noise: 2
+    time: 3
+    needs_intel: true
+    text: "The bunker's clock drifts and its security checks start failing."
+    tradeoff: "Quiet, but it only lasts until someone resyncs the clock."
+    effects: [{type: flag, node: bunker, name: clock_drift, duration: 10}]
+
+  corrupt_auth_codes:
+    name: "Corrupt the launch authentication codes"
+    kind: exploit
+    recon: 3
+    noise: 3
+    time: 4
+    needs_intel: true
+    text: "The bunker cannot verify any launch order."
+    tradeoff: "Precise, but discovery means a fast code change."
+    effects: [{type: flag, node: bunker, name: no_auth, duration: 10}]
+
+  feed_false_targets:
+    name: "Feed false targets"
+    kind: software
+    recon: 2
+    noise: 3
+    time: 3
+    needs_intel: true
+    collateral: 10
+    text: "The bunker wastes its launch window acting on fake targeting data."
+    tradeoff: "High risk. A bad roll causes collateral."
+    effects: [{type: counter, node: bunker, name: radar_wasted, delta: 1}]
+
+  trigger_false_alarm:
+    name: "Trigger a false alarm"
+    kind: software
+    recon: 2
+    noise: 2
+    time: 3
+    needs_intel: true
+    text: "The crew seal up or evacuate."
+    tradeoff: "Quiet but temporary. It runs on a timer."
+    effects: [{type: flag, node: bunker, name: sealed, duration: 6}]
+
+  halt_reload_convoy:
+    name: "Halt the reload convoy"
+    kind: physical
+    recon: 1
+    noise: 2
+    time: 3
+    text: "No more missiles reach the bunker by rail."
+    tradeoff: "Only partial on its own. Pairs well with other routes."
+    effects: [{type: counter, node: bunker, name: reloads, delta: -1}]
+
+  staged_diversion:
+    name: "Stage a diversion"
+    kind: physical
+    recon: 1
+    noise: 4
+    time: 3
+    collateral: 10
+    text: "Deliberate noise elsewhere pulls the defenders' attention."
+    tradeoff: "Costs collateral, but buys cover for another action running at the same time."
+    effects: [{type: trace, delta: -2}]

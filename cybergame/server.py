@@ -5,7 +5,19 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.types import Scope
 from pydantic import BaseModel
+
+
+class NoCacheStaticFiles(StaticFiles):
+    """Browsers caching a stale copy of app.js/dm.html/style.css during
+    rapid iteration has bitten this project more than once -- never cache
+    these, the server is the only source of truth."""
+
+    async def get_response(self, path: str, scope: Scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-store"
+        return response
 
 from cybergame import scenario as scenario_mod
 from cybergame.engine import Game, GameError
@@ -151,6 +163,12 @@ def dm_topology():
                 continue
             seen.add(key)
             edges.append({"from": key[0], "to": key[1], "kind": "hidden"})
+    for a, b in SC.get("effect_edges", []):
+        key = tuple(sorted((a, b)))
+        if key in seen:
+            continue
+        seen.add(key)
+        edges.append({"from": key[0], "to": key[1], "kind": "effect"})
 
     return {"nodes": nodes, "edges": edges, "entry_node": SC["entry_node"]}
 
@@ -225,14 +243,14 @@ def sheet_match(sheet_id: str):
     return {"sheet": sheet, "nodes": matching}
 
 
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+app.mount("/static", NoCacheStaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.get("/")
 def index():
-    return FileResponse(STATIC_DIR / "index.html")
+    return FileResponse(STATIC_DIR / "index.html", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/dm")
 def dm_page():
-    return FileResponse(STATIC_DIR / "dm.html")
+    return FileResponse(STATIC_DIR / "dm.html", headers={"Cache-Control": "no-store"})

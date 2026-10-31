@@ -30,7 +30,7 @@ CARD_DEFAULTS = {
     "text": "", "tradeoff": "",
 }
 
-EFFECT_TYPES = {"disable", "flag", "counter", "noise", "pin", "hint", "random_disable"}
+EFFECT_TYPES = {"disable", "flag", "counter", "noise", "trace", "pin", "hint", "random_disable"}
 
 
 def load(path):
@@ -77,25 +77,46 @@ def build(data):
 
 
 def _build_adjacency(sc):
-    """Build the pivot graph: which nodes a known node reveals.
+    """Build the pivot graph: which nodes a known node reveals, kept
+    separate from which nodes merely have an *effect* on each other.
+
+    A power/water/fuel dependency does not mean two sites talk to each
+    other on a network -- cutting a substation blacks out everything
+    downstream of it without the attacker being able to pivot through
+    that wire. A `needs` group only becomes a pivot path if it is marked
+    `network: true` (used for the shared grid-control/SCADA plane between
+    power stations and substations). Everything else -- the leaf sites a
+    substation feeds, a generator's fuel line, and so on -- is recorded in
+    `effect_edges` for display only.
+
+    `extra_edges` work the same way: kind "network" or "bridge" is a real
+    pivot path, kind "effect" is a dependency with no pivot.
 
     `neighbors[nid]` is revealed by a level-2 (map links) scan of nid.
     `deep_neighbors[nid]` is revealed only by a level-3 (deep) scan of
     nid -- this is where hidden nodes (feeder lines, backup generators)
-    surface. Edges come from power/need dependencies (in both
-    directions) plus any extra_edges in the scenario file.
+    surface.
     """
     nodes = sc["nodes_by_id"]
     neighbors = {nid: set() for nid in nodes}
+    effect_edges = set()
     for nid, n in nodes.items():
         for group in n.get("needs", []):
             for src in group.get("sources", []):
-                if src in nodes:
+                if src not in nodes:
+                    continue
+                if group.get("network"):
                     neighbors[nid].add(src)
                     neighbors[src].add(nid)
+                else:
+                    effect_edges.add(tuple(sorted((nid, src))))
     for edge in sc.get("extra_edges", []):
         a, b = edge.get("from"), edge.get("to")
-        if a in nodes and b in nodes:
+        if a not in nodes or b not in nodes:
+            continue
+        if edge.get("kind") == "effect":
+            effect_edges.add(tuple(sorted((a, b))))
+        else:
             neighbors[a].add(b)
             neighbors[b].add(a)
 
@@ -110,6 +131,7 @@ def _build_adjacency(sc):
 
     sc["neighbors"] = {k: sorted(v) for k, v in neighbors.items()}
     sc["deep_neighbors"] = {k: sorted(v) for k, v in deep_neighbors.items()}
+    sc["effect_edges"] = sorted(effect_edges)
 
 
 def _validate(sc):
