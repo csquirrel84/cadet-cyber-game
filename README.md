@@ -41,9 +41,32 @@ container and tears down the WiFi access point):
 ./teardown.sh
 ```
 
-**Windows:** `setup.ps1` currently only starts a single shared-screen
-instance (see below) -- the field deployment above (multiple teams, WiFi
-access point) is Linux-only for now.
+## Quick start (Windows)
+
+```powershell
+.\setup.ps1
+```
+
+If PowerShell blocks the script the first time, run this once first:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+Does the same as `setup.sh`: Docker install check, build, 10 isolated team
+instances, and an attempt at a WiFi access point. **The WiFi step is
+best-effort on Windows** -- there's no officially supported command-line
+way to create one, so the script drives the older netsh hosted-network
+mechanism, which depends on your WiFi adapter and Windows version. If it
+fails, it prints the exact manual steps to turn on Mobile Hotspot by hand
+instead; the game and the 10 team instances work the same either way, only
+how team laptops connect changes.
+
+**This Windows path has not been run end to end yet** -- test it on the
+actual machine you'll deploy on well before a real session, not on the day.
+
+`.\teardown.ps1` reverses it: stops every team's container and (if it was
+brought up automatically) the access point.
 
 ## Running a single shared-screen game instead
 

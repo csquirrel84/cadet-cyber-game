@@ -1,11 +1,43 @@
-# Checks for Docker Desktop, installs it if missing (via winget when
-# available), makes sure the daemon is running, then builds and starts
-# the game. Run this from PowerShell: .\setup.ps1
+# One script: checks for Docker (installs it if missing), builds the
+# game, starts one isolated instance per team (ports 8000-8009), and
+# attempts to bring up a WiFi access point on this machine for the team
+# laptops to connect to. No internet is shared -- cadets only need to
+# reach this machine.
+#
+# The WiFi access point step is best-effort: Windows has no first-class
+# scriptable "create a hotspot" command (the Settings app's Mobile
+# Hotspot toggle is the only officially supported route, and it has no
+# command-line equivalent). This script tries the older netsh hosted
+# network + Internet Connection Sharing mechanism, which is scriptable
+# but depends on your WiFi adapter's driver and your Windows version. If
+# it fails, it prints the exact manual steps to turn on Mobile Hotspot
+# by hand instead -- the game itself and the per-team deployment still
+# work fine either way, this only affects how team laptops connect.
+#
+# Run from PowerShell: .\setup.ps1
 # If scripts are blocked on this machine, run once first:
 #   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+#
+# To undo everything this does, run .\teardown.ps1
 
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
+
+$SSID = "OPERATION-BLACKOUT"
+$WifiPassword = "blackout2026"
+$Image = "cadet-cyber-game-lan:latest"
+$Teams = @(
+    @{ Name = "alpha";   Port = 8000 },
+    @{ Name = "bravo";   Port = 8001 },
+    @{ Name = "charlie"; Port = 8002 },
+    @{ Name = "delta";   Port = 8003 },
+    @{ Name = "echo";    Port = 8004 },
+    @{ Name = "foxtrot"; Port = 8005 },
+    @{ Name = "golf";    Port = 8006 },
+    @{ Name = "hotel";   Port = 8007 },
+    @{ Name = "india";   Port = 8008 },
+    @{ Name = "juliett"; Port = 8009 }
+)
 
 function Test-Docker {
     return [bool](Get-Command docker -ErrorAction SilentlyContinue)
@@ -75,15 +107,94 @@ if (-not $composeOk) {
     exit 1
 }
 
-Write-Host "Building and starting the game..."
-docker compose up -d --build
+# ------------------------------------------------------------ WiFi access point
 
-$composeFile = Get-Content "$PSScriptRoot\docker-compose.yml" -Raw
-$port = "8000"
-if ($composeFile -match '"(\d+):8000"') {
-    $port = $Matches[1]
+function Show-ManualHotspotFallback {
+    Write-Host ""
+    Write-Host "=== Set up the WiFi network by hand instead ==="
+    Write-Host "1. Open Settings > Network & internet > Mobile hotspot"
+    Write-Host "2. Edit the network name to: $SSID"
+    Write-Host "3. Edit the network password to: $WifiPassword"
+    Write-Host "4. Turn Mobile hotspot On"
+    Write-Host "5. Note the IP address Windows shows there (usually 192.168.137.1)"
+    Write-Host "   -- use that instead of the address this script would have printed."
+    Write-Host "================================================="
+    Write-Host ""
 }
 
+$apIp = $null
+try {
+    $driverInfo = netsh wlan show drivers
+    if ($driverInfo -notmatch "Hosted network supported\s*:\s*Yes") {
+        Write-Host "This machine's WiFi adapter doesn't support a hosted network."
+        Show-ManualHotspotFallback
+    } else {
+        Write-Host "Starting the access point ($SSID)..."
+        netsh wlan set hostednetwork mode=allow ssid=$SSID key=$WifiPassword keyUsage=persistent | Out-Null
+        $startResult = netsh wlan start hostednetwork
+        if ($startResult -notmatch "started") {
+            throw "netsh wlan start hostednetwork did not report success: $startResult"
+        }
+        Start-Sleep -Seconds 2
+
+        # netsh has no switch to actually hand out IP addresses to clients --
+        # that needs Internet Connection Sharing enabled on the hosted
+        # network's virtual adapter, which has no CLI either. This drives
+        # the same legacy COM API the old Network Connections GUI used.
+        # "Public" side just needs to be *some* LAN-type adapter for ICS to
+        # accept the configuration -- it does not need to actually be
+        # connected to the internet, since nothing is being shared to it.
+        $hnetShare = New-Object -ComObject HNetCfg.HNetShare
+        $hostedConn = $null
+        $publicConn = $null
+        foreach ($conn in $hnetShare.EnumEveryConnection) {
+            $props = $hnetShare.NetConnectionProps.Invoke($conn)
+            if ($props.DeviceName -like "*Hosted Network*" -or $props.DeviceName -like "*Virtual Wi-Fi*" -or $props.Name -like "*Hosted Network*") {
+                $hostedConn = $conn
+            } elseif (-not $publicConn -and $props.MediaType -eq 0) {
+                $publicConn = $conn
+            }
+        }
+
+        if (-not $hostedConn -or -not $publicConn) {
+            throw "Could not identify the hosted network's virtual adapter for sharing."
+        }
+
+        $hnetShare.INetSharingConfigurationForINetConnection.Invoke($publicConn).EnableSharing(0)  # 0 = ICS_PUBLIC
+        $hnetShare.INetSharingConfigurationForINetConnection.Invoke($hostedConn).EnableSharing(1)   # 1 = ICS_PRIVATE
+        Start-Sleep -Seconds 3
+        $apIp = "192.168.137.1"
+        Write-Host "Access point is up."
+    }
+} catch {
+    Write-Host "Automatic WiFi access point setup failed: $($_.Exception.Message)"
+    Show-ManualHotspotFallback
+}
+
+# ------------------------------------------------------------------- build + run
+
+Write-Host "Building the game image..."
+docker build -t $Image .
+
+Write-Host "Starting one game per team..."
+docker compose -f docker-compose.lan.yml up -d
+
 Write-Host ""
-Write-Host "Running. Open http://localhost:$port/ in a browser."
-Write-Host "DM console: http://localhost:$port/dm"
+Write-Host "================================================================"
+if ($apIp) {
+    Write-Host "WiFi network:  $SSID"
+    Write-Host "Password:      $WifiPassword"
+    Write-Host "================================================================"
+}
+Write-Host "Team     Connect to"
+foreach ($team in $Teams) {
+    $addr = if ($apIp) { $apIp } else { "<this machine's hotspot IP>" }
+    Write-Host ("{0,-10} http://{1}:{2}/" -f $team.Name, $addr, $team.Port)
+}
+Write-Host "================================================================"
+Write-Host "DM consoles (this machine only, not reachable by the teams):"
+foreach ($team in $Teams) {
+    Write-Host ("  http://127.0.0.1:{0}/dm" -f $team.Port)
+}
+Write-Host "================================================================"
+Write-Host "To shut everything down: .\teardown.ps1"
