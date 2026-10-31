@@ -1,0 +1,102 @@
+# Windows-specific field deployment. Identical in intent to
+# docker-compose.lan.yml (Linux), but uses per-team published ports
+# instead of network_mode: host -- Docker Desktop's WSL2 backend does not
+# reliably support host networking the way native Linux does (it's an
+# opt-in Docker Desktop setting, and even then does not behave the same
+# way loopback detection needs it to). Published ports via Docker
+# Desktop's WSL2 forwarding are the well-supported, always-on path on
+# Windows.
+#
+# Do not edit this to match docker-compose.lan.yml exactly, and do not
+# edit docker-compose.lan.yml to match this -- they solve the same
+# networking problem two different ways for two different platforms.
+services:
+  team-alpha:
+    image: cadet-cyber-game-lan:latest
+    container_name: team-alpha
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./scenario:/app/scenario:ro
+
+  team-bravo:
+    image: cadet-cyber-game-lan:latest
+    container_name: team-bravo
+    restart: unless-stopped
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./scenario:/app/scenario:ro
+
+  team-charlie:
+    image: cadet-cyber-game-lan:latest
+    container_name: team-charlie
+    restart: unless-stopped
+    ports:
+      - "8002:8000"
+    volumes:
+      - ./scenario:/app/scenario:ro
+
+  team-delta:
+    image: cadet-cyber-game-lan:latest
+    container_name: team-delta
+    restart: unless-stopped
+    ports:
+      - "8003:8000"
+    volumes:
+      - ./scenario:/app/scenario:ro
+
+  team-echo:
+    image: cadet-cyber-game-lan:latest
+    container_name: team-echo
+    restart: unless-stopped
+    ports:
+      - "8004:8000"
+    volumes:
+      - ./scenario:/app/scenario:ro
+
+  team-foxtrot:
+    image: cadet-cyber-game-lan:latest
+    container_name: team-foxtrot
+    restart: unless-stopped
+    ports:
+      - "8005:8000"
+    volumes:
+      - ./scenario:/app/scenario:ro
+
+  team-golf:
+    image: cadet-cyber-game-lan:latest
+    container_name: team-golf
+    restart: unless-stopped
+    ports:
+      - "8006:8000"
+    volumes:
+      - ./scenario:/app/scenario:ro
+
+  team-hotel:
+    image: cadet-cyber-game-lan:latest
+    container_name: team-hotel
+    restart: unless-stopped
+    ports:
+      - "8007:8000"
+    volumes:
+      - ./scenario:/app/scenario:ro
+
+  team-india:
+    image: cadet-cyber-game-lan:latest
+    container_name: team-india
+    restart: unless-stopped
+    ports:
+      - "8008:8000"
+    volumes:
+      - ./scenario:/app/scenario:ro
+
+  team-juliett:
+    image: cadet-cyber-game-lan:latest
+    container_name: team-juliett
+    restart: unless-stopped
+    ports:
+      - "8009:8000"
+    volumes:
+      - ./scenario:/app/scenario:ro

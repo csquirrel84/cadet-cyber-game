@@ -285,7 +285,7 @@ Write-Host "Building the game image..."
 docker build -t $Image .
 
 Write-Host "Starting one game per team..."
-docker compose -f docker-compose.lan.yml up -d
+docker compose -f docker-compose.lan.windows.yml up -d
 
 Write-Host ""
 Write-Host "================================================================"

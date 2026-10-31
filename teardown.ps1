@@ -11,7 +11,7 @@ $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
 Write-Host "Stopping team containers..."
-docker compose -f docker-compose.lan.yml down
+docker compose -f docker-compose.lan.windows.yml down
 
 try {
     $status = netsh wlan show hostednetwork
