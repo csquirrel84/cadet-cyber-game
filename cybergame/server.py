@@ -2,8 +2,8 @@
 import hashlib
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.types import Scope
 from pydantic import BaseModel
@@ -27,6 +27,28 @@ SCENARIO_PATH = BASE_DIR / "scenario" / "blackout.yaml"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 app = FastAPI(title="Cadet cyber game")
+
+# The DM console can reveal every asset and control the clock -- it must
+# never be reachable by a cadet on the LAN. In the field deployment the
+# DM works from the browser on the host machine itself, so "only answer
+# loopback requests" is the whole access control: no password to lose or
+# share by accident. Covers the /dm route, its API, and the static file
+# directly (StaticFiles would otherwise serve dm.html at /static/dm.html
+# too, bypassing the /dm route entirely).
+_DM_PATHS = ("/dm", "/static/dm.html")
+_LOOPBACK_HOSTS = {"127.0.0.1", "::1"}
+
+
+@app.middleware("http")
+async def restrict_dm_to_localhost(request: Request, call_next):
+    path = request.url.path
+    if path in _DM_PATHS or path.startswith("/api/dm/"):
+        client_host = request.client.host if request.client else None
+        if client_host not in _LOOPBACK_HOSTS:
+            # 404, not 403 -- don't confirm to a cadet poking at the URL
+            # that a DM console exists at all.
+            return PlainTextResponse("Not Found", status_code=404)
+    return await call_next(request)
 
 SC = scenario_mod.load(SCENARIO_PATH)
 GAME = Game(SC)

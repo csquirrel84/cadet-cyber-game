@@ -13,7 +13,10 @@ def reset_game():
 
 @pytest.fixture
 def client():
-    return TestClient(app)
+    # Simulate a request from the host machine's own loopback interface --
+    # the DM routes are gated on this (see restrict_dm_to_localhost), and
+    # TestClient otherwise presents as a bare hostname with no real IP.
+    return TestClient(app, client=("127.0.0.1", 12345))
 
 
 def test_state_before_start(client):
@@ -101,3 +104,22 @@ def test_dm_reveal_all_shows_every_node(client):
     state = client.get("/api/state").json()
     assert len(state["nodes"]) == len(GAME.nodes)
     assert all(n["known"] >= 2 for n in state["nodes"])
+
+
+def test_dm_blocked_for_non_loopback_client():
+    remote_client = TestClient(app, client=("10.42.0.55", 54321))
+    assert remote_client.get("/dm").status_code == 404
+    assert remote_client.get("/static/dm.html").status_code == 404
+    assert remote_client.post("/api/dm/reveal_all").status_code == 404
+    assert remote_client.get("/api/dm/topology").status_code == 404
+
+
+def test_dm_allowed_for_loopback_client(client):
+    assert client.get("/dm").status_code == 200
+    assert client.get("/static/dm.html").status_code == 200
+
+
+def test_non_dm_routes_unaffected_for_non_loopback_client():
+    remote_client = TestClient(app, client=("10.42.0.55", 54321))
+    assert remote_client.get("/").status_code == 200
+    assert remote_client.get("/api/state").status_code == 200

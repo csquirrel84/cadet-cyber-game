@@ -1,0 +1,109 @@
+# Field deployment: one container per team, each its own port, all on the
+# host's own network stack (network_mode: host) so the /dm localhost-only
+# check sees real loopback connections rather than Docker's NAT gateway
+# address. Run via setup-lan.sh, not directly -- that script builds the
+# image once (as cadet-cyber-game-lan:latest, referenced below) and also
+# brings up the WiFi access point the team laptops connect to.
+#
+# Each team's game is a fully separate process with its own memory --
+# nothing a team does is visible to any other team.
+services:
+  team-alpha:
+    image: cadet-cyber-game-lan:latest
+    container_name: team-alpha
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - PORT=8000
+    volumes:
+      - ./scenario:/app/scenario:ro
+
+  team-bravo:
+    image: cadet-cyber-game-lan:latest
+    container_name: team-bravo
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - PORT=8001
+    volumes:
+      - ./scenario:/app/scenario:ro
+
+  team-charlie:
+    image: cadet-cyber-game-lan:latest
+    container_name: team-charlie
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - PORT=8002
+    volumes:
+      - ./scenario:/app/scenario:ro
+
+  team-delta:
+    image: cadet-cyber-game-lan:latest
+    container_name: team-delta
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - PORT=8003
+    volumes:
+      - ./scenario:/app/scenario:ro
+
+  team-echo:
+    image: cadet-cyber-game-lan:latest
+    container_name: team-echo
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - PORT=8004
+    volumes:
+      - ./scenario:/app/scenario:ro
+
+  team-foxtrot:
+    image: cadet-cyber-game-lan:latest
+    container_name: team-foxtrot
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - PORT=8005
+    volumes:
+      - ./scenario:/app/scenario:ro
+
+  team-golf:
+    image: cadet-cyber-game-lan:latest
+    container_name: team-golf
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - PORT=8006
+    volumes:
+      - ./scenario:/app/scenario:ro
+
+  team-hotel:
+    image: cadet-cyber-game-lan:latest
+    container_name: team-hotel
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - PORT=8007
+    volumes:
+      - ./scenario:/app/scenario:ro
+
+  team-india:
+    image: cadet-cyber-game-lan:latest
+    container_name: team-india
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - PORT=8008
+    volumes:
+      - ./scenario:/app/scenario:ro
+
+  team-juliett:
+    image: cadet-cyber-game-lan:latest
+    container_name: team-juliett
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - PORT=8009
+    volumes:
+      - ./scenario:/app/scenario:ro
