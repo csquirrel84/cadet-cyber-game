@@ -109,13 +109,13 @@ def _build_adjacency(sc):
                     neighbors[nid].add(src)
                     neighbors[src].add(nid)
                 else:
-                    effect_edges.add(tuple(sorted((nid, src))))
+                    effect_edges.add((src, nid))  # (source, dependent)
     for edge in sc.get("extra_edges", []):
         a, b = edge.get("from"), edge.get("to")
         if a not in nodes or b not in nodes:
             continue
         if edge.get("kind") == "effect":
-            effect_edges.add(tuple(sorted((a, b))))
+            effect_edges.add((a, b))  # (source, dependent), as written
         else:
             neighbors[a].add(b)
             neighbors[b].add(a)

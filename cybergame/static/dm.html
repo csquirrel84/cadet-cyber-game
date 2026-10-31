@@ -29,6 +29,10 @@
   <button class="danger" id="revealAll">Reveal all assets</button>
 
   <h3>Full asset map (DM only &mdash; shows everything, not just what the team has found)</h3>
+  <p style="font-size:12px;color:#9aa0a6">Only real network paths are drawn -- a line here is something the
+  team could pivot along. Power, water and fuel dependencies don't appear
+  as lines (they made the diagram unreadable); they're listed in the
+  table below instead.</p>
   <div id="topo-wrap">
     <svg id="topo-map" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"></svg>
     <div id="topo-legend">
@@ -39,10 +43,13 @@
       <span><i style="background:#9b6bff"></i>neutralised (win condition)</span>
       <span><i style="background:#fff;border:1px solid #000"></i>foothold</span>
       <span style="display:inline-flex;align-items:center;gap:4px"><svg width="20" height="4"><line x1="0" y1="2" x2="20" y2="2" stroke="#6b7076" stroke-width="1.5"/></svg>network path (can be pivoted along)</span>
-      <span style="display:inline-flex;align-items:center;gap:4px"><svg width="20" height="4"><line x1="0" y1="2" x2="20" y2="2" stroke="#8a6a3a" stroke-width="1.5" stroke-dasharray="3 2"/></svg>effect only (power/water/fuel -- no pivot)</span>
       <span style="display:inline-flex;align-items:center;gap:4px"><svg width="20" height="4"><line x1="0" y1="2" x2="20" y2="2" stroke="#6b7076" stroke-width="1.5" stroke-dasharray="4 2"/></svg>hidden (deep scan only)</span>
     </div>
   </div>
+  <table id="effect-table" style="width:100%;border-collapse:collapse;font-size:12px;margin-top:10px">
+    <thead><tr><th style="text-align:left;padding:3px 8px;border-bottom:1px solid #2a2e33">Site</th><th style="text-align:left;padding:3px 8px;border-bottom:1px solid #2a2e33">Goes down if you cut</th></tr></thead>
+    <tbody id="effect-table-body"></tbody>
+  </table>
 
   <h3>Briefing</h3>
   <pre id="briefing" style="white-space:pre-wrap;font-size:13px;color:#cfd3d8"></pre>
@@ -214,7 +221,8 @@ function renderTopology(topo) {
   // the two lines at the crossing point, the standard circuit-diagram
   // convention for "this wire passes over that one" -- so it reads as
   // deliberate, not as a tangle. Self-corrects if edges are added later.
-  const segs = topo.edges.map((e) => ({ e, a: pos[e.from], b: pos[e.to] }));
+  const drawnEdges = topo.edges.filter((e) => e.kind !== "effect");
+  const segs = drawnEdges.map((e) => ({ e, a: pos[e.from], b: pos[e.to] }));
   function segIntersect(p1, p2, p3, p4) {
     const d1x = p2[0] - p1[0], d1y = p2[1] - p1[1];
     const d2x = p4[0] - p3[0], d2y = p4[1] - p3[1];
@@ -241,9 +249,8 @@ function renderTopology(topo) {
     const a = byId[e.from], b = byId[e.to];
     if (!a || !b) continue;
     const [ax, ay] = ap, [bx, by] = bp;
-    const dash = e.kind === "hidden" ? ' stroke-dasharray="1.5 1.2"'
-      : e.kind === "effect" ? ' stroke-dasharray="0.4 0.7"' : "";
-    const strokeColor = e.kind === "effect" ? "#8a6a3a" : "#6b7076";
+    const dash = e.kind === "hidden" ? ' stroke-dasharray="1.5 1.2"' : "";
+    const strokeColor = "#6b7076";
     const opacity = (a.visible && b.visible) ? 0.8 : 0.3;
     const crossPts = hops[idx];
     if (crossPts && crossPts.length) {
@@ -289,6 +296,18 @@ function renderTopology(topo) {
     </g>`);
   }
   svg.innerHTML = parts.join("");
+
+  const bySite = {};
+  for (const e of topo.edges) {
+    if (e.kind !== "effect") continue;
+    const source = byId[e.from], dependent = byId[e.to];
+    if (!source || !dependent) continue;
+    (bySite[dependent.name] ||= []).push(source.name);
+  }
+  const rows = Object.keys(bySite).sort().map((site) =>
+    `<tr><td style="padding:3px 8px;border-bottom:1px solid #1a1d1f">${site}</td><td style="padding:3px 8px;border-bottom:1px solid #1a1d1f;color:#9aa0a6">${bySite[site].sort().join(", ")}</td></tr>`
+  );
+  el("effect-table-body").innerHTML = rows.join("");
 }
 
 async function refresh() {

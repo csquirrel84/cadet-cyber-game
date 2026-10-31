@@ -147,28 +147,32 @@ def dm_topology():
             "neutralised": GAME.is_neutralised(nid) if n["type"] in ("air defence", "air base", "objective") else None,
         })
 
+    # Dedup keys are scoped per edge kind, not shared across kinds -- a
+    # power-effect edge (e.g. a hidden feeder line to the air defence
+    # battery) can share a node pair with that same node's "hidden, deep
+    # scan reveals it" edge, and both need to survive independently.
     seen = set()
     edges = []
     for nid, neighbors in SC["neighbors"].items():
         for other in neighbors:
-            key = tuple(sorted((nid, other)))
+            key = ("link", tuple(sorted((nid, other))))
             if key in seen:
                 continue
             seen.add(key)
-            edges.append({"from": key[0], "to": key[1], "kind": "link"})
+            edges.append({"from": key[1][0], "to": key[1][1], "kind": "link"})
     for nid, deep in SC["deep_neighbors"].items():
         for other in deep:
-            key = tuple(sorted((nid, other)))
+            key = ("hidden", tuple(sorted((nid, other))))
             if key in seen:
                 continue
             seen.add(key)
-            edges.append({"from": key[0], "to": key[1], "kind": "hidden"})
+            edges.append({"from": key[1][0], "to": key[1][1], "kind": "hidden"})
     for a, b in SC.get("effect_edges", []):
-        key = tuple(sorted((a, b)))
+        key = ("effect", tuple(sorted((a, b))))
         if key in seen:
             continue
         seen.add(key)
-        edges.append({"from": key[0], "to": key[1], "kind": "effect"})
+        edges.append({"from": a, "to": b, "kind": "effect"})
 
     return {"nodes": nodes, "edges": edges, "entry_node": SC["entry_node"]}
 
