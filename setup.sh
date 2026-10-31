@@ -46,11 +46,17 @@ fi
 
 echo "Waiting for the Docker daemon to respond..."
 tries=0
-until docker info >/dev/null 2>&1; do
+docker_err=""
+until docker_err="$(docker info 2>&1 >/dev/null)"; do
   tries=$((tries + 1))
   if [ "$tries" -gt 30 ]; then
     echo "Docker still isn't responding after 60 seconds."
-    if [ "$os" = "Darwin" ]; then
+    if echo "$docker_err" | grep -qi "permission denied"; then
+      echo "This looks like a group-membership issue, not a stopped daemon --"
+      echo "the daemon is running, but this shell session predates being added"
+      echo "to the 'docker' group. Log out and back in (or run 'newgrp docker'"
+      echo "in this shell), then re-run this script."
+    elif [ "$os" = "Darwin" ]; then
       echo "Open Docker Desktop manually (check the whale icon in the menu bar), then re-run this script."
     else
       echo "Try: sudo systemctl start docker"
