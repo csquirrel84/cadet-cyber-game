@@ -7,6 +7,10 @@ allowed to touch what. Run it for up to 10 teams at once from one DM laptop
 -- no internet connection needed, and no technical setup beyond running one
 script.
 
+**New to this? Start here:** [Simple setup guide](docs/SIMPLE_SETUP.md)
+-- plain-language, step-by-step, written for someone who has never run
+a script before.
+
 **Printable docs for running a real session:**
 [Game rules](docs/GAME_RULES.md) ·
 [Card reference](docs/CARD_REFERENCE.md) ·
