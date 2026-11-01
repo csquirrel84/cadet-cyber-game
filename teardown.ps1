@@ -10,8 +10,9 @@
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
-Write-Host "Stopping team containers..."
-docker compose -f docker-compose.lan.windows.yml down
+Write-Host "Stopping any running game(s)..."
+try { docker compose -f docker-compose.yml down } catch { Write-Host "(no single shared-screen game was running)" }
+try { docker compose -f docker-compose.lan.windows.yml down } catch { Write-Host "(no team games were running)" }
 
 try {
     $status = netsh wlan show hostednetwork

@@ -1,8 +1,9 @@
-# One script: checks for WSL and Docker (installs either if missing),
-# builds the game, starts one isolated instance per team (ports
-# 8000-8009), and attempts to bring up a WiFi access point on this
-# machine for the team laptops to connect to. No internet is shared --
-# cadets only need to reach this machine.
+# One script: asks how many teams to run (or a single shared-screen
+# game instead), checks for WSL and Docker (installs either if
+# missing), builds the game, starts it, and -- for the multi-team case
+# -- attempts to bring up a WiFi access point on this machine for the
+# team laptops to connect to. No internet is shared -- cadets only need
+# to reach this machine.
 #
 # If WSL needs installing, this exits after kicking it off -- it needs a
 # reboot before Docker Desktop can be installed or started. Re-run the
@@ -30,6 +31,25 @@
 
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
+
+# --------------------------------------------------------------- team count
+
+Write-Host "How many teams should this run?"
+Write-Host "  1-10  that many teams, each fully separate, over a WiFi network"
+Write-Host "  0     a single shared-screen game instead (one TV/projector, no WiFi needed)"
+$modeInput = Read-Host "Teams (1-10, or 0)"
+$TeamCount = 0
+$Mode = "local"
+if ($modeInput -and $modeInput -ne "0") {
+    $parsed = 0
+    if ([int]::TryParse($modeInput, [ref]$parsed) -and $parsed -ge 1 -and $parsed -le 10) {
+        $Mode = "lan"
+        $TeamCount = $parsed
+    } else {
+        Write-Host "Didn't understand that -- running a single shared-screen game instead."
+    }
+}
+Write-Host ""
 
 # ------------------------------------------------------------------- WSL
 
@@ -205,39 +225,53 @@ function Start-HostedNetworkAp {
 }
 
 $apIp = $null
-try {
-    Write-Host "Starting the access point ($SSID)..."
-    $apIp = Start-HostedNetworkAp
-    Write-Host "Access point is up."
-} catch {
-    Write-Host "Hosted network approach failed: $($_.Exception.Message)"
-    Show-ManualHotspotFallback
+if ($Mode -eq "lan") {
+    try {
+        Write-Host "Starting the access point ($SSID)..."
+        $apIp = Start-HostedNetworkAp
+        Write-Host "Access point is up."
+    } catch {
+        Write-Host "Hosted network approach failed: $($_.Exception.Message)"
+        Show-ManualHotspotFallback
+    }
 }
 
 # ------------------------------------------------------------------- build + run
 
-Write-Host "Building the game image..."
-docker build -t $Image .
+$selectedTeams = $Teams | Select-Object -First $TeamCount
 
-Write-Host "Starting one game per team..."
-docker compose -f docker-compose.lan.windows.yml up -d
+if ($Mode -eq "local") {
+    Write-Host "Building and starting a single shared-screen game..."
+    docker compose -f docker-compose.yml up -d --build
+} else {
+    Write-Host "Building the game image..."
+    docker build -t $Image .
+    $serviceNames = $selectedTeams | ForEach-Object { "team-$($_.Name)" }
+    Write-Host "Starting $TeamCount team game(s)..."
+    docker compose -f docker-compose.lan.windows.yml up -d @serviceNames
+}
 
 Write-Host ""
 Write-Host "================================================================"
-if ($apIp) {
-    Write-Host "WiFi network:  $SSID"
-    Write-Host "Password:      $WifiPassword"
+if ($Mode -eq "local") {
+    Write-Host "Main screen (cadets): http://localhost:8000/"
+    Write-Host "DM console (you):     http://127.0.0.1:8100/dm"
+} else {
+    if ($apIp) {
+        Write-Host "WiFi network:  $SSID"
+        Write-Host "Password:      $WifiPassword"
+        Write-Host "================================================================"
+    }
+    Write-Host "Team     Connect to"
+    foreach ($team in $selectedTeams) {
+        $addr = if ($apIp) { $apIp } else { "<this machine's hotspot IP>" }
+        Write-Host ("{0,-10} http://{1}:{2}/" -f $team.Name, $addr, $team.Port)
+    }
     Write-Host "================================================================"
-}
-Write-Host "Team     Connect to"
-foreach ($team in $Teams) {
-    $addr = if ($apIp) { $apIp } else { "<this machine's hotspot IP>" }
-    Write-Host ("{0,-10} http://{1}:{2}/" -f $team.Name, $addr, $team.Port)
-}
-Write-Host "================================================================"
-Write-Host "DM consoles (this machine only, not reachable by the teams):"
-foreach ($team in $Teams) {
-    Write-Host ("  http://127.0.0.1:{0}/dm" -f ($team.Port + 100))
+    Write-Host "DM consoles (this machine only, not reachable by the teams):"
+    foreach ($team in $selectedTeams) {
+        Write-Host ("  http://127.0.0.1:{0}/dm" -f ($team.Port + 100))
+    }
 }
 Write-Host "================================================================"
 Write-Host "To shut everything down: .\teardown.ps1"
