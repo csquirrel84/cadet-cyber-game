@@ -28,12 +28,17 @@ Follow these steps in order. Don't skip any.
 2. Find the file called `setup.ps1`.
 3. Right-click it.
 4. Click **Run with PowerShell**.
-5. A black window opens with white writing. **Leave it alone and let
-   it work.** This can take a long time (up to 30 minutes) the first
-   time. Don't close the window.
-6. If a blue box appears asking "Do you want to allow this app..." click
+5. A black window opens. It will ask you a question:
+   "How many teams should this run?"
+   - If you have several teams, each on their own laptop, type the
+     number of teams (for example `4`) and press Enter.
+   - If it's just going to be one game on one screen (like a TV or
+     projector), type `0` and press Enter.
+6. **Leave it alone and let it work.** This can take a long time (up to
+   30 minutes) the first time. Don't close the window.
+7. If a blue box appears asking "Do you want to allow this app..." click
    **Yes**.
-7. If the window says the game is already blocked by a security
+8. If the window says the game is already blocked by a security
    setting, do this instead:
    - Right-click `setup.ps1` again.
    - This time, holding down **Shift**, right-click inside the folder
@@ -41,7 +46,7 @@ Follow these steps in order. Don't skip any.
    - Type this and press Enter: `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`
    - Type `Y` and press Enter if it asks.
    - Type `.\setup.ps1` and press Enter.
-8. Wait. When it's finished, you'll see a list of web addresses, like
+9. Wait. When it's finished, you'll see a list of web addresses, like
    `http://192.168.137.1:8000/`. **Don't close this window** — closing
    it does not stop the game, but keep it somewhere safe so you can read
    those addresses later.
